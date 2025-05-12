@@ -35,7 +35,8 @@ def tts(filename, output_dir="./srt_and_mav"):
         text=content,
         audio_path=audio_path,
         srt_path=srt_path,
-        voice="ja-JP-DaichiNeural",
+        #voice="ja-JP-DaichiNeural",
+        voice="ja-JP-MayuNeural", 
         rate="-10%",
         punctuation_breaks=custom_breaks,
     )
