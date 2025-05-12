@@ -10,11 +10,13 @@ from typing import List
 from app.utils.ppt_parser import extract_notes
 from app.tts.tts_engine import tts, find_txt_files  # ✅ 你要确保这些文件已在对应目录下
 
+from app.api import pdf_api
+from app.api import srt
 # ===================== 配置与数据结构 =====================
 
 UPLOAD_DIR = "uploads"
 OUTPUT_DIR = "notes_output"
-AUDIO_OUTPUT_DIR = "srt_and_mav"
+AUDIO_OUTPUT_DIR = "srt_and_wav"
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -31,7 +33,7 @@ class Project(BaseModel):
 # ===================== 初始化 FastAPI =====================
 
 app = FastAPI()
-
+# CORS 中间件
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -39,9 +41,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+# 挂载 API 模块
+app.include_router(pdf_api.router)
+app.include_router(srt.router)
 # ✅ 挂载静态目录供前端访问音频和字幕
-app.mount("/static/audio", StaticFiles(directory=AUDIO_OUTPUT_DIR), name="audio")
+app.mount("/srt_and_wav", StaticFiles(directory=AUDIO_OUTPUT_DIR), name="audio")
 
 # ===================== 项目相关接口 =====================
 
