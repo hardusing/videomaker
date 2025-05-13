@@ -12,6 +12,7 @@ from app.tts.tts_engine import tts, find_txt_files  # ✅ 你要确保这些文�
 
 from app.api import pdf_api
 from app.api import srt
+from app.api import tts_api
 # ===================== 配置与数据结构 =====================
 
 UPLOAD_DIR = "uploads"
@@ -44,6 +45,7 @@ app.add_middleware(
 # 挂载 API 模块
 app.include_router(pdf_api.router)
 app.include_router(srt.router)
+app.include_router(tts_api.router)
 # ✅ 挂载静态目录供前端访问音频和字幕
 app.mount("/srt_and_wav", StaticFiles(directory=AUDIO_OUTPUT_DIR), name="audio")
 

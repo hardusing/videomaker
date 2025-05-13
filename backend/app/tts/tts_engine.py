@@ -3,10 +3,14 @@ import os
 from .azure_toolkit import controlable_text_to_speech_with_subtitle
 from .merge_subtitle import merge_subtitles
 from .srt_processer import process_srt
+from app.utils.mysql_config_helper import get_config_value
 
+
+speech_key = get_config_value("speech_key")
+service_region = get_config_value("service_region")
 # Azure credentials
-speech_key = "7jd2VgRY1wvbFk8HPLAwzXTP3MYQPPD6ceojmpTsHElPeZnmZSROJQQJ99ALACi0881XJ3w3AAAYACOGWNMn"
-service_region = "japaneast"
+speech_key=speech_key,
+service_region=service_region,
 
 custom_breaks = {
     "。": "800ms",
@@ -19,6 +23,7 @@ custom_breaks = {
 
 
 def tts(filename, output_dir="./srt_and_wav"):
+    voice = get_config_value("voice", "ja-JP-MayuNeural")
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -35,8 +40,9 @@ def tts(filename, output_dir="./srt_and_wav"):
         text=content,
         audio_path=audio_path,
         srt_path=srt_path,
+        voice=voice,
         #voice="ja-JP-DaichiNeural",
-        voice="ja-JP-MayuNeural", 
+        #voice="ja-JP-MayuNeural", 
         rate="-10%",
         punctuation_breaks=custom_breaks,
     )
