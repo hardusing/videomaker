@@ -1,18 +1,17 @@
 import os
 import uuid
 from datetime import datetime
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List
 
 from app.utils.ppt_parser import extract_notes
-from app.tts.tts_engine import tts, find_txt_files  # ✅ 你要确保这些文件已在对应目录下
 
 from app.api import pdf_api
-from app.api import srt
 from app.api import tts_api
+print("✅ 已注册 tts_api 路由")
 from app.api import download_api
 from app.api import notes_api
 from app.api import image_notes_api
@@ -49,11 +48,13 @@ app.add_middleware(
 )
 # 挂载 API 模块
 app.include_router(pdf_api.router)
-app.include_router(srt.router)
 app.include_router(tts_api.router)
 app.include_router(download_api.router)
 app.include_router(notes_api.router)
 app.include_router(image_notes_api.router)
+print("✅ tts_api router loaded with endpoints:")
+for route in tts_api.router.routes:
+    print("  -", route.path, route.methods)
 # ✅ 挂载静态目录供前端访问音频和字幕
 app.mount("/srt_and_wav", StaticFiles(directory=AUDIO_OUTPUT_DIR), name="audio")
 
