@@ -163,3 +163,5 @@ cython_debug/
 
 # Node.js
 node_modules/
+
+backend/fastapi.tar

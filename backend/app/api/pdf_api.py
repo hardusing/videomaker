@@ -3,14 +3,18 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from pathlib import Path
 import os
-# from pdf2image import convert_from_path
+import fitz  # 来自 PyMuPDF
+from pdf2image import convert_from_path
 
 router = APIRouter(prefix="/api/pdf", tags=["PDF 操作"])
 
-UPLOAD_DIR = "pdf_uploads"
-IMAGE_DIR = "converted_images"
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+UPLOAD_DIR = BASE_DIR / "uploads"
+PDF_DIR = BASE_DIR / "pdf_uploads"
+IMG_DIR = BASE_DIR / "converted_images"
+
+IMG_DIR.mkdir(parents=True, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-os.makedirs(IMAGE_DIR, exist_ok=True)
 
 
 @router.post("/upload")
@@ -25,24 +29,33 @@ async def upload_pdf(file: UploadFile = File(...)):
 
     return {"message": "上传成功", "filename": file.filename}
 
+@router.post("/convert/{pdf_filename}")
+async def convert_pdf_to_images(pdf_filename: str):
+    """
+    使用 PyMuPDF 将 PDF 每页转为 PNG，无需 Poppler
+    """
+    if not pdf_filename.endswith(".pdf"):
+        pdf_filename += ".pdf"
 
-# @router.post("/convert")
-# def convert_pdf(filename: str):
-#     pdf_path = Path(UPLOAD_DIR) / filename
-#     if not pdf_path.exists():
-#         raise HTTPException(status_code=404, detail="PDF 文件不存在")
+    pdf_path = PDF_DIR / pdf_filename
+    if not pdf_path.exists():
+        raise HTTPException(status_code=404, detail="PDF 文件不存在")
 
-#     # 转换 PDF 每页为图片
-#     images = convert_from_path(str(pdf_path), dpi=200)
-#     output_files = []
+    try:
+        doc = fitz.open(pdf_path)
+        stem = pdf_path.stem
+        saved_files = []
 
-#     for i, img in enumerate(images):
-#         image_filename = f"{pdf_path.stem}_page{i+1}.png"
-#         image_path = Path(IMAGE_DIR) / image_filename
-#         img.save(image_path, "PNG")
-#         output_files.append(str(image_path))
+        for i, page in enumerate(doc, start=1):
+            pix = page.get_pixmap(dpi=200)  # 可调 dpi 清晰度
+            img_path = IMG_DIR / f"{stem}_p{i}.png"
+            pix.save(str(img_path))
+            saved_files.append(img_path.name)
 
-#     return {
-#         "message": "转换成功",
-#         "images": output_files
-#     }
+        return {
+            "message": f"{pdf_filename} 转换成功，共 {len(saved_files)} 页",
+            "images": saved_files
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"转换失败: {e}")

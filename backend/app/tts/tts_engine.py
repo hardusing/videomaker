@@ -8,9 +8,6 @@ from app.utils.mysql_config_helper import get_config_value
 
 speech_key = get_config_value("speech_key")
 service_region = get_config_value("service_region")
-# Azure credentials
-speech_key=speech_key,
-service_region=service_region,
 
 custom_breaks = {
     "。": "800ms",
@@ -33,21 +30,30 @@ def tts(filename, output_dir="./srt_and_wav"):
     fn_prefix = os.path.splitext(os.path.basename(filename))[0]
     audio_path = os.path.join(output_dir, fn_prefix + ".wav")
     srt_path = os.path.join(output_dir, fn_prefix + "_pre.srt")
+    merged_srt_path = os.path.join(output_dir, fn_prefix + "_merged.srt")
 
-    controlable_text_to_speech_with_subtitle(
-        speech_key=speech_key,
-        service_region=service_region,
-        text=content,
-        audio_path=audio_path,
-        srt_path=srt_path,
-        voice=voice,
-        #voice="ja-JP-DaichiNeural",
-        #voice="ja-JP-MayuNeural", 
-        rate="-10%",
-        punctuation_breaks=custom_breaks,
-    )
+    try:
+        print(f"🔄 开始处理 {filename}")
+        controlable_text_to_speech_with_subtitle(
+            speech_key=speech_key,
+            service_region=service_region,
+            text=content,
+            audio_path=audio_path,
+            srt_path=srt_path,
+            voice=voice,
+            rate="-10%",
+            punctuation_breaks=custom_breaks,
+        )
+        print("✅ 合成完成，检查 SRT：", srt_path)
 
-    process_srt(srt_path, os.path.join(output_dir, fn_prefix + "_merged.srt"))
+        if os.path.exists(srt_path):
+            process_srt(srt_path, merged_srt_path)
+            print(f"✅ 成功生成：{merged_srt_path}")
+        else:
+            print(f"❌ 错误：SRT 文件未生成：{srt_path}")
+
+    except Exception as e:
+        print(f"[TTS错误] 文件 {filename} 处理失败: {e}")
 
 
 def find_txt_files(directory):
