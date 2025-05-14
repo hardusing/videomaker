@@ -1,14 +1,14 @@
 # app/utils/mysql_config_helper.py
 
 import pymysql
+import os
 
-# 配置你的数据库连接
 conn_params = {
-    "host": "192.168.100.81",      # ✅ 纯 IP 地址或域名
-    "port": 3306,
-    "user": "root",
-    "password": "root",
-    "database": "videomaker",
+    "host": os.getenv("DB_HOST", "127.0.0.1"),
+    "port": int(os.getenv("DB_PORT", 3306)),
+    "user": os.getenv("DB_USER", "root"),
+    "password": os.getenv("DB_PASSWORD", "root"),
+    "database": os.getenv("DB_NAME", "videomaker"),
     "charset": "utf8mb4"
 }
 

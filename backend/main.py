@@ -17,7 +17,9 @@ from app.api import download_api
 from app.api import notes_api
 from app.api import image_notes_api
 # ===================== 配置与数据结构 =====================
-
+from dotenv import load_dotenv
+load_dotenv()
+print(os.getenv("DB_HOST"))
 UPLOAD_DIR = "uploads"
 OUTPUT_DIR = "notes_output"
 AUDIO_OUTPUT_DIR = "srt_and_wav"
@@ -95,9 +97,3 @@ def extract_notes_for_project(project_id: str):
         "notes": notes
     }
 
-# ===================== TTS 相关接口 =====================
-
-@app.get("/api/tts/texts")
-def list_txt_files():
-    files = [f for f in os.listdir(OUTPUT_DIR) if f.endswith(".txt")]
-    return files

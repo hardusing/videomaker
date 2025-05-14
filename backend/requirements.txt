@@ -8,4 +8,11 @@ python-multipart==0.0.6
 pydantic==2.4.2
 python-dotenv==1.0.0
 celery==5.3.4
-redis==5.0.1 
+redis==5.0.1
+azure-cognitiveservices-speech==1.31.0
+PyMuPDF==1.23.7
+pdf2image==1.16.3
+python-pptx==0.6.21
+Pillow==10.1.0
+python-docx==0.8.11
+

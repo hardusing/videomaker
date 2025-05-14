@@ -1,0 +1,9 @@
+__pycache__/
+*.tar
+*.zip
+srt_and_wav/
+converted_images/
+uploads/
+pdf_uploads/
+temp_zip/
+notes_output/

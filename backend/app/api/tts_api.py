@@ -1,5 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from pathlib import Path
 from app.utils.mysql_config_helper import get_config_value, set_config_value
 import os
 from app.tts.tts_engine import tts, find_txt_files
@@ -12,6 +13,17 @@ class ConfigItem(BaseModel):
     key: str
     value: str
 
+class SingleTTSRequest(BaseModel):
+    filename: str  # 例如 "lesson01.txt"
+
+print("📦 正在加载 tts_api.py")
+
+@router.get("/texts")
+def list_txt_files():
+    """获取所有可用的文本文件列表"""
+    files = [f for f in os.listdir(NOTES_DIR) if f.endswith(".txt")]
+    return files
+
 @router.post("/set-config")
 def set_config(item: ConfigItem):
     set_config_value(item.key, item.value)
@@ -22,7 +34,7 @@ def get_config(key: str):
     value = get_config_value(key, default="未设置")
     return {"key": key, "value": value}
 
-@router.post("/api/tts/generate")
+@router.post("/generate")
 def generate_all_audio():
     raw_txt = find_txt_files(NOTES_DIR)
     raw_txt.sort()
@@ -37,11 +49,35 @@ def generate_all_audio():
     audio_files = [f for f in files if f.endswith(".wav")]
     srt_files = [f for f in files if f.endswith("_merged.srt")]
 
-    print("生成的音频文件：", audio_path)
-    print("生成的预处理字幕文件：", srt_path)
-    print("目标输出目录：", output_dir)
+    print("生成的音频文件：", audio_files)
+    print("生成的预处理字幕文件：", srt_files)
+    print("目标输出目录：", AUDIO_OUTPUT_DIR)
 
     return {
         "audio_files": audio_files,
         "subtitle_files": srt_files
+    }
+
+@router.post("/generate-one")
+def generate_single_audio(data: SingleTTSRequest):
+    txt_path = Path(NOTES_DIR) / data.filename
+
+    if not txt_path.exists() or txt_path.suffix != ".txt":
+        raise HTTPException(status_code=400, detail="指定的 TXT 文件不存在")
+
+    try:
+        tts(txt_path, output_dir=AUDIO_OUTPUT_DIR)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"TTS 处理失败: {str(e)}")
+
+    wav_name = txt_path.stem + ".wav"
+    srt_name = txt_path.stem + "_merged.srt"
+
+    audio_path = Path(AUDIO_OUTPUT_DIR) / wav_name
+    srt_path = Path(AUDIO_OUTPUT_DIR) / srt_name
+
+    return {
+        "audio_file": audio_path.name if audio_path.exists() else None,
+        "subtitle_file": srt_path.name if srt_path.exists() else None,
+        "status": "success"
     }
