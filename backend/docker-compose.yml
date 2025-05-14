@@ -8,8 +8,6 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: videomaker
-      MYSQL_USER: root
-      MYSQL_PASSWORD: root
     ports:
       - "3306:3306"
     volumes:
@@ -17,7 +15,6 @@ services:
 
   fastapi:
     image: my-fastapi-app
-    build: .
     container_name: fastapi
     restart: always
     ports:
