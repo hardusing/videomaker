@@ -5,6 +5,7 @@ from pathlib import Path
 import os
 import fitz  # 来自 PyMuPDF
 from pdf2image import convert_from_path
+from typing import List
 
 router = APIRouter(prefix="/api/pdf", tags=["PDF 操作"])
 
@@ -28,6 +29,30 @@ async def upload_pdf(file: UploadFile = File(...)):
         f.write(await file.read())
 
     return {"message": "上传成功", "filename": file.filename}
+
+@router.get("/upload/list", response_model=List[str])
+async def list_uploaded_files():
+    """
+    获取上传目录下所有 PDF 文件名
+    """
+    if not UPLOAD_DIR.exists():
+        raise HTTPException(status_code=404, detail="上传目录不存在")
+    files = [f.name for f in UPLOAD_DIR.glob("*.pdf")]
+    return files
+
+@router.delete("/upload/delete/{filename}")
+async def delete_uploaded_file(filename: str):
+    """
+    删除上传目录下指定的 PDF 文件
+    """
+    file_path = UPLOAD_DIR / filename
+    if not file_path.exists() or not file_path.suffix == ".pdf":
+        raise HTTPException(status_code=404, detail="指定的 PDF 文件不存在")
+    try:
+        file_path.unlink()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"删除失败: {e}")
+    return {"message": f"{filename} 已删除"}
 
 @router.post("/convert/{pdf_filename}")
 async def convert_pdf_to_images(pdf_filename: str):
