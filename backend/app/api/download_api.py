@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pathlib import Path
+from typing import List
 import zipfile
 import uuid
 from fastapi import BackgroundTasks
@@ -48,3 +49,43 @@ async def download_all_srt_and_wav(background_tasks: BackgroundTasks):
         media_type="application/zip",
         background=background_tasks
     )
+
+@router.get("/api/files/list", response_model=List[str])
+async def list_all_files():
+    """
+    获取 srt_and_wav 目录下所有文件名（包含 .wav 和 .srt）
+    """
+    if not SRT_WAV_DIR.exists():
+        raise HTTPException(status_code=404, detail="目录不存在")
+
+    file_list = [f.name for f in SRT_WAV_DIR.iterdir() if f.is_file()]
+    return file_list
+
+@router.delete("/api/files/clear")
+async def delete_all_files():
+    """
+    删除 srt_and_wav 目录下的所有文件
+    """
+    deleted = []
+    for file in SRT_WAV_DIR.glob("*"):
+        if file.is_file():
+            try:
+                file.unlink()
+                deleted.append(file.name)
+            except Exception as e:
+                print(f"[WARN] 删除失败: {file.name}，原因：{e}")
+    return {"deleted": deleted, "count": len(deleted)}
+
+@router.delete("/api/files/delete/{filename}")
+async def delete_single_file(filename: str):
+    """
+    删除 srt_and_wav 目录下指定文件
+    """
+    target_file = SRT_WAV_DIR / filename
+    if not target_file.exists() or not target_file.is_file():
+        raise HTTPException(status_code=404, detail="文件不存在")
+    try:
+        target_file.unlink()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"删除失败: {e}")
+    return {"deleted": filename}
