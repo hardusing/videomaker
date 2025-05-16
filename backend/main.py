@@ -54,9 +54,6 @@ app.include_router(download_api.router)
 app.include_router(notes_api.router)
 app.include_router(image_notes_api.router)
 app.include_router(video_api.router)
-print("✅ tts_api router loaded with endpoints:")
-for route in tts_api.router.routes:
-    print("  -", route.path, route.methods)
 # ✅ 挂载静态目录供前端访问音频和字幕
 app.mount("/srt_and_wav", StaticFiles(directory=AUDIO_OUTPUT_DIR), name="audio")
 
