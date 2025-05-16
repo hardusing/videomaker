@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List
+# from fastapi_limiter import FastAPILimiter
+# import redis.asyncio as redis
 
 from app.utils.ppt_parser import extract_notes
 
@@ -56,6 +58,18 @@ app.include_router(image_notes_api.router)
 app.include_router(video_api.router)
 # ✅ 挂载静态目录供前端访问音频和字幕
 app.mount("/srt_and_wav", StaticFiles(directory=AUDIO_OUTPUT_DIR), name="audio")
+
+@app.on_event("startup")
+async def startup():
+    # redis_client = redis.from_url("redis://localhost", encoding="utf-8", decode_responses=True)
+    # await FastAPILimiter.init(redis_client)
+    pass
+
+# 示例：添加限流装饰器
+@app.get("/")
+# @app.get("/", dependencies=[RateLimiter(times=2, seconds=5)])
+async def root():
+    return {"message": "Hello World"}
 
 # ===================== 项目相关接口 =====================
 
