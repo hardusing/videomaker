@@ -10,7 +10,7 @@ from typing import List
 router = APIRouter(prefix="/api/pdf", tags=["PDF 操作"])
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-UPLOAD_DIR = BASE_DIR / "uploads"
+UPLOAD_DIR = BASE_DIR / "pdf_uploads"
 PDF_DIR = BASE_DIR / "pdf_uploads"
 IMG_DIR = BASE_DIR / "converted_images"
 
@@ -57,7 +57,7 @@ async def delete_uploaded_file(filename: str):
 @router.post("/convert/{pdf_filename}")
 async def convert_pdf_to_images(pdf_filename: str):
     """
-    使用 PyMuPDF 将 PDF 每页转为 PNG，无需 Poppler
+    使用 PyMuPDF 将 PDF 每页转为 PNG，并保存到以 PDF 文件名为名的子目录中
     """
     if not pdf_filename.endswith(".pdf"):
         pdf_filename += ".pdf"
@@ -68,17 +68,23 @@ async def convert_pdf_to_images(pdf_filename: str):
 
     try:
         doc = fitz.open(pdf_path)
-        stem = pdf_path.stem
+        stem = pdf_path.stem  
+
+        # 创建对应子目录：
+        output_subdir = IMG_DIR / stem
+        output_subdir.mkdir(parents=True, exist_ok=True)
+
         saved_files = []
 
         for i, page in enumerate(doc, start=1):
-            pix = page.get_pixmap(dpi=200)  # 可调 dpi 清晰度
-            img_path = IMG_DIR / f"{stem}_p{i}.png"
+            pix = page.get_pixmap(dpi=200)
+            img_path = output_subdir / f"{stem}_p{i}.png"
             pix.save(str(img_path))
-            saved_files.append(img_path.name)
+            saved_files.append(f"{stem}/{img_path.name}")  # 返回相对路径
 
         return {
             "message": f"{pdf_filename} 转换成功，共 {len(saved_files)} 页",
+            "image_subdir": f"{stem}/",
             "images": saved_files
         }
 
