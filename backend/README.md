@@ -34,7 +34,7 @@ pip install -r requirements.txt
 创建 `.env` 文件并配置以下参数：
 ```env
 # 数据库配置
-DB_HOST=192.168.100.81
+DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=root

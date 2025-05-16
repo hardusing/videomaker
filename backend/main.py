@@ -15,6 +15,7 @@ print("✅ 已注册 tts_api 路由")
 from app.api import download_api
 from app.api import notes_api
 from app.api import image_notes_api
+from app.api import video_api
 # ===================== 配置与数据结构 =====================
 from dotenv import load_dotenv
 load_dotenv()
@@ -52,6 +53,7 @@ app.include_router(tts_api.router)
 app.include_router(download_api.router)
 app.include_router(notes_api.router)
 app.include_router(image_notes_api.router)
+app.include_router(video_api.router)
 print("✅ tts_api router loaded with endpoints:")
 for route in tts_api.router.routes:
     print("  -", route.path, route.methods)
