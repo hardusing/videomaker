@@ -17,8 +17,6 @@ class ConfigItem(BaseModel):
 class SingleTTSRequest(BaseModel):
     filename: str  # 例如 "lesson01.txt"
 
-print("📦 正在加载 tts_api.py")
-
 @router.get("/texts")
 def list_txt_files():
     """获取所有可用的文本文件列表"""

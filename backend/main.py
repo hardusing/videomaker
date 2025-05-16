@@ -13,7 +13,6 @@ from app.utils.ppt_parser import extract_notes
 
 from app.api import pdf_api
 from app.api import tts_api
-print("✅ 已注册 tts_api 路由")
 from app.api import download_api
 from app.api import notes_api
 from app.api import image_notes_api
