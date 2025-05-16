@@ -12,6 +12,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # 暴露端口（FastAPI 默认是8000）
-EXPOSE 8003
+EXPOSE 8000
 # 启动服务
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8003"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

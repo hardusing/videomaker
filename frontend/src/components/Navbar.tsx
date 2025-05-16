@@ -13,6 +13,10 @@ const Navbar: React.FC = () => {
     {
         key: '/tts',
         label: <Link to="/tts">文本转音频</Link>,  
+      },
+      {
+        key: '/video-manager',
+        label: <Link to="/video-manager">视频管理</Link>,
       }
   ]
 

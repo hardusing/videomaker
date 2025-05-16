@@ -1,32 +1,21 @@
-version: '3.8'
+version: "3.8"
 
 services:
-  db:
+  mysql:
     image: mysql:8.0
     container_name: mysql
-    restart: always
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: videomaker
     ports:
       - "3306:3306"
     volumes:
-      - db-data:/var/lib/mysql
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
 
   fastapi:
-    image: my-fastapi-app
+    build: .
     container_name: fastapi
-    restart: always
+    depends_on:
+      - mysql
     ports:
       - "8000:8000"
-    depends_on:
-      - db
-    environment:
-      DB_HOST: db
-      DB_PORT: 3306
-      DB_NAME: videomaker
-      DB_USER: root
-      DB_PASSWORD: root
-
-volumes:
-  db-data:

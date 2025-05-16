@@ -3,7 +3,7 @@ import { TypedUseSelectorHook, useDispatch, useSelector } from 'react-redux'
 
 export const store = configureStore({
   reducer: {
-    // 添加reducers
+    // 在这里添加你的 reducers
   },
 })
 
