@@ -20,26 +20,39 @@ async def list_tasks(task_type: str = None) -> Dict[str, Dict[str, Any]]:
 @router.get("/{task_id}/progress")
 def get_task_progress(task_id: str):
     """
-    获取任务全流程进度
+    获取任务全流程详细进度
     """
     task = task_manager.get_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
-    # 只返回data里的各阶段进度
-    progress = {
-        "pdf_upload": {"status": task.get("status"), "progress": 100 if task.get("status") == "completed" else 0},
-    }
     data = task.get("data", {})
-    # 合并各阶段
-    for key in [
-        "pdf_to_images", "add_black_border", "notes_generate", "tts", "video_upload", "video_transcode"
-    ]:
-        if key in data:
-            progress[key] = data[key]
+    # 收集所有阶段（data下所有key）
+    progress = {}
+    for key, value in data.items():
+        progress[key] = value
+    # 主任务状态
+    progress["pdf_upload"] = {"status": task.get("status"), "progress": 100 if task.get("status") == "completed" else 0}
+    # 自动补全常见阶段
+    default_keys = [
+        "pdf_to_images", "add_black_border", "notes_generate", "tts_generate", "tts_generate_selected", "video_upload", "video_transcode"
+    ]
+    for key in default_keys:
+        if key not in progress:
+            progress[key] = {"status": "pending", "progress": 0}
     # 视频文件列表
     if "videos" in data:
         progress["videos"] = data["videos"]
-    return progress
+    # 汇总主任务元信息
+    result = {
+        "task_id": task.get("id"),
+        "type": task.get("type"),
+        "status": task.get("status"),
+        "created_at": task.get("created_at"),
+        "updated_at": task.get("updated_at"),
+        "error": task.get("error"),
+        "progress": progress
+    }
+    return result
 
 # ================== 各阶段API中写入进度的举例 ==================
 

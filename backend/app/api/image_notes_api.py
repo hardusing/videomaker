@@ -23,10 +23,11 @@ openai.api_key = "sk-proj-Mt9b37Wy7xJj7N7v95-VKz5qaUIC7swffq48SJc6ghB0CgESpUFFvi
 
 @router.post("/api/image-notes/generate-all")
 async def generate_notes_for_all_images(
-    prompt: str = Form("请将下列文字整理为简洁通顺的日文文稿")
+    prompt: str = Form("请将下列文字整理为简洁通顺的日文文稿"),
+    task_id: str = Form(None, description="任务ID，可选")
 ):
     """
-    遍历 converted_images 下所有图片，生成对应 txt 文件并保存在同目录
+    遍历 converted_images 下所有图片，生成对应 txt 文件并保存在同目录，并可选写入任务进度
     """
     if not IMG_DIR.exists():
         raise HTTPException(status_code=404, detail="converted_images 目录不存在")
@@ -37,8 +38,8 @@ async def generate_notes_for_all_images(
         raise HTTPException(status_code=404, detail="未找到任何图片")
 
     result = []
-
-    for img_path in image_files:
+    total = len(image_files)
+    for idx, img_path in enumerate(image_files, 1):
         try:
             # OCR识别
             ocr_text = pytesseract.image_to_string(Image.open(img_path), lang='chi_sim+eng')
@@ -58,10 +59,39 @@ async def generate_notes_for_all_images(
             txt_path.write_text(generated_text, encoding="utf-8")
 
             result.append({"image": img_path.name, "txt": txt_path.name, "status": "success"})
-        
+            status = "success"
+            error = None
         except Exception as e:
             result.append({"image": img_path.name, "status": "failed", "error": str(e)})
-
+            status = "failed"
+            error = str(e)
+        # 实时写入任务进度
+        if task_id:
+            task = task_manager.get_task(task_id)
+            if task:
+                task_data = task.get("data", {})
+                task_data["notes_generate"] = {
+                    "status": "processing" if idx < total else ("completed" if error is None else "failed"),
+                    "progress": int(idx / total * 100),
+                    "current": idx,
+                    "total": total,
+                    "current_image": img_path.name,
+                    "results": result.copy(),
+                    "error": error
+                }
+                task_manager.update_task(task_id, data=task_data)
+    # 处理完成后写入最终状态
+    if task_id:
+        task = task_manager.get_task(task_id)
+        if task:
+            task_data = task.get("data", {})
+            task_data["notes_generate"] = {
+                "status": "completed" if all(r.get("status") == "success" for r in result) else "failed",
+                "progress": 100,
+                "total": total,
+                "results": result
+            }
+            task_manager.update_task(task_id, data=task_data)
     return JSONResponse(content={"results": result})
 
 @router.delete("/api/image-notes/image")

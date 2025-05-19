@@ -135,6 +135,17 @@ async def convert_pdf_to_images(task_id: str):
                 buf = io.BytesIO()
                 image.save(buf, format='PNG')
                 thumb_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+                # 实时写入主任务进度
+                parent_task = task_manager.get_task(task_id)
+                parent_data = parent_task.get("data", {})
+                parent_data["pdf_to_images"] = {
+                    "status": "processing",
+                    "progress": progress,
+                    "current_page": i,
+                    "total_pages": total_pages,
+                    "images": saved_files.copy()
+                }
+                task_manager.update_task(task_id, data=parent_data)
                 # 返回数据
                 yield json.dumps({
                     "image_id": image_id,
@@ -156,6 +167,16 @@ async def convert_pdf_to_images(task_id: str):
                     "total_pages": total_pages
                 }
             )
+            # 主任务写入完成状态
+            parent_task = task_manager.get_task(task_id)
+            parent_data = parent_task.get("data", {})
+            parent_data["pdf_to_images"] = {
+                "status": "completed",
+                "progress": 100,
+                "total_pages": total_pages,
+                "images": saved_files
+            }
+            task_manager.update_task(task_id, data=parent_data)
             yield json.dumps({
                 "task_id": convert_task_id,
                 "status": "completed",
@@ -164,6 +185,15 @@ async def convert_pdf_to_images(task_id: str):
             }).encode() + b"\n"
         except Exception as e:
             task_manager.update_task_status(convert_task_id, TaskStatus.FAILED, str(e))
+            # 主任务写入失败状态
+            parent_task = task_manager.get_task(task_id)
+            parent_data = parent_task.get("data", {})
+            parent_data["pdf_to_images"] = {
+                "status": "failed",
+                "progress": 0,
+                "error": str(e)
+            }
+            task_manager.update_task(task_id, data=parent_data)
             yield json.dumps({
                 "error": f"转换失败: {str(e)}",
                 "status": "failed"
@@ -177,24 +207,19 @@ async def convert_pdf_to_images(task_id: str):
 async def websocket_convert_pdf(websocket: WebSocket, task_id: str):
     """WebSocket 端点，用于实时传输转换进度和图片路径"""
     await websocket.accept()
-    
     try:
         task = task_manager.get_task(task_id)
         if not task:
             await websocket.send_json({"error": "任务不存在"})
             return
-        
         if task["type"] != "pdf_upload":
             await websocket.send_json({"error": "无效的任务类型，需要先上传 PDF"})
             return
-        
         if task["status"] != TaskStatus.COMPLETED:
             await websocket.send_json({"error": "PDF 上传任务未完成"})
             return
-
         pdf_filename = task["data"]["original_filename"]
         pdf_path = PDF_DIR / pdf_filename
-
         # 创建转换任务
         convert_task_id = task_manager.create_task(
             task_type="pdf_to_images",
@@ -204,28 +229,33 @@ async def websocket_convert_pdf(websocket: WebSocket, task_id: str):
                 "parent_task_id": task_id
             }
         )
-
         try:
             doc = fitz.open(pdf_path)
             stem = pdf_path.stem
-
             # 创建对应子目录
             output_subdir = IMG_DIR / stem
             output_subdir.mkdir(parents=True, exist_ok=True)
-
             saved_files = []
             total_pages = len(doc)
-
             for i, page in enumerate(doc, start=1):
                 # 更新进度
                 progress = int((i / total_pages) * 100)
                 task_manager.update_task_progress(convert_task_id, progress)
-
                 pix = page.get_pixmap(dpi=200)
                 img_path = output_subdir / f"{stem}_p{i}.png"
                 pix.save(str(img_path))
                 saved_files.append(f"{stem}/{img_path.name}")
-
+                # 主任务写入进度
+                parent_task = task_manager.get_task(task_id)
+                parent_data = parent_task.get("data", {})
+                parent_data["pdf_to_images"] = {
+                    "status": "processing",
+                    "progress": progress,
+                    "current_page": i,
+                    "total_pages": total_pages,
+                    "images": saved_files.copy()
+                }
+                task_manager.update_task(task_id, data=parent_data)
                 # 通过 WebSocket 发送进度和图片路径
                 await websocket.send_json({
                     "task_id": convert_task_id,
@@ -234,10 +264,7 @@ async def websocket_convert_pdf(websocket: WebSocket, task_id: str):
                     "total_pages": total_pages,
                     "image_path": f"{stem}/{img_path.name}"
                 })
-
-                # 添加小延迟，避免发送太快
                 await asyncio.sleep(0.1)
-
             # 更新任务状态
             task_manager.update_task(
                 convert_task_id,
@@ -249,22 +276,37 @@ async def websocket_convert_pdf(websocket: WebSocket, task_id: str):
                     "total_pages": total_pages
                 }
             )
-
-            # 发送完成消息
+            # 主任务写入完成状态
+            parent_task = task_manager.get_task(task_id)
+            parent_data = parent_task.get("data", {})
+            parent_data["pdf_to_images"] = {
+                "status": "completed",
+                "progress": 100,
+                "total_pages": total_pages,
+                "images": saved_files
+            }
+            task_manager.update_task(task_id, data=parent_data)
             await websocket.send_json({
                 "task_id": convert_task_id,
                 "status": "completed",
                 "message": "转换完成",
                 "total_images": len(saved_files)
             })
-
         except Exception as e:
             task_manager.update_task_status(convert_task_id, TaskStatus.FAILED, str(e))
+            # 主任务写入失败状态
+            parent_task = task_manager.get_task(task_id)
+            parent_data = parent_task.get("data", {})
+            parent_data["pdf_to_images"] = {
+                "status": "failed",
+                "progress": 0,
+                "error": str(e)
+            }
+            task_manager.update_task(task_id, data=parent_data)
             await websocket.send_json({
                 "error": f"转换失败: {str(e)}",
                 "status": "failed"
             })
-
     except WebSocketDisconnect:
         print("WebSocket 连接断开")
     except Exception as e:

@@ -118,6 +118,7 @@ async def upload_multiple_videos(
         video_list = task_data.get("videos", [])
         video_list.extend(saved_files)
         task_data["videos"] = list(set(video_list))
+        task_data["video_upload"] = {"status": "completed", "progress": 100, "files": saved_files}
         task_manager.update_task(task_id, data=task_data)
     return {
         "task_id": task_id,
@@ -245,10 +246,27 @@ async def transcode_video(
                     await send_progress(pdf_name, transcoding_tasks[pdf_name])
             transcoding_tasks[pdf_name]["status"] = "completed"
             await send_progress(pdf_name, transcoding_tasks[pdf_name])
+            # 更新任务状态
+            if task_id:
+                task_data = task.get("data", {})
+                task_data["video_transcode"] = {
+                    "status": "completed",
+                    "progress": 100,
+                    "results": transcoding_tasks[pdf_name]["results"]
+                }
+                task_manager.update_task(task_id, data=task_data)
         except Exception as e:
             transcoding_tasks[pdf_name]["status"] = "failed"
             transcoding_tasks[pdf_name]["error"] = str(e)
             await send_progress(pdf_name, transcoding_tasks[pdf_name])
+            # 更新任务状态
+            if task_id:
+                task_data = task.get("data", {})
+                task_data["video_transcode"] = {
+                    "status": "failed",
+                    "error": str(e)
+                }
+                task_manager.update_task(task_id, data=task_data)
     background_tasks.add_task(process_videos)
     return {
         "message": f"开始转码 {len(videos_to_process)} 个视频文件",
