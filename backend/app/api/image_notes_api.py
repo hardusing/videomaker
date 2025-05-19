@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Form, Query, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Form, Query, Depends, BackgroundTasks, Body
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi_limiter import FastAPILimiter
 from fastapi_limiter.depends import RateLimiter
@@ -10,6 +10,7 @@ import tempfile
 import shutil
 import os
 from typing import List
+from ..utils.task_manager import task_manager
 
 router = APIRouter()
 
@@ -63,52 +64,78 @@ async def generate_notes_for_all_images(
 
     return JSONResponse(content={"results": result})
 
-@router.delete("/api/image-notes/image/{filename:path}")  
-async def delete_single_image(filename: str):
+@router.delete("/api/image-notes/image")
+async def delete_images_by_task(
+    task_id: str = Query(..., description="任务ID"),
+    image_ids: List[str] = Body(..., embed=True, description="要删除的图片ID列表"),
+    black_bordered: bool = Query(False, description="是否删除加黑边图片（默认为原图）")
+):
     """
-    删除指定图片文件（支持子目录）
+    根据task_id和image_id列表批量删除图片。
+    支持删除converted_images或processed_images下的图片。
     """
-    # 支持传入 lesson01/lesson01_p1.png
-    file_path = (IMG_DIR / filename).resolve()
+    task = task_manager.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    if task["type"] == "pdf_upload":
+        pdf_name = task["data"].get("original_filename", "").rsplit(".", 1)[0]
+    elif task["type"] == "pdf_to_images":
+        pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+    else:
+        raise HTTPException(status_code=400, detail="不支持的任务类型")
+    base_dir = PROCESSED_IMG_DIR if black_bordered else IMG_DIR
+    target_dir = base_dir / pdf_name
+    if not target_dir.exists():
+        raise HTTPException(status_code=404, detail="图片目录不存在")
+    deleted = []
+    not_found = []
+    for image_id in image_ids:
+        img_path = target_dir / f"{image_id}.png"
+        if img_path.exists():
+            img_path.unlink()
+            deleted.append(f"{pdf_name}/{image_id}.png")
+        else:
+            not_found.append(f"{pdf_name}/{image_id}.png")
+    return {
+        "deleted": deleted,
+        "not_found": not_found,
+        "message": f"成功删除 {len(deleted)} 张，未找到 {len(not_found)} 张"
+    }
 
-    # 防止路径穿越攻击（必须限制在 IMG_DIR 内部）
-    if not str(file_path).startswith(str(IMG_DIR.resolve())):
-        raise HTTPException(status_code=400, detail="非法路径")
-
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="文件不存在")
-
-    if not file_path.suffix.lower() in [".png", ".jpg", ".jpeg"]:
-        raise HTTPException(status_code=400, detail="仅支持删除图片文件")
-
-    try:
-        file_path.unlink()
-        return {"message": f"{filename} 删除成功"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"删除失败：{str(e)}")
-    
 @router.get("/api/image-notes/download")
 async def download_image_zip(
-    pdf_name: str = Query(..., description="PDF 文件名（不含扩展名）"),
+    task_id: str = Query(None, description="任务ID，推荐优先使用"),
+    pdf_name: str = Query(None, description="PDF 文件名（不含扩展名，兼容老参数）"),
     background_tasks: BackgroundTasks = None
 ):
     """
-    将指定子目录下的所有图片打包成 zip 并提供下载。
-    下载后临时 zip 会被后台任务清理。
+    下载指定任务的converted_images目录下所有图片为zip。
+    支持task_id或pdf_name。
+    下载后临时zip会被后台任务清理。
     """
+    if task_id:
+        task = task_manager.get_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="任务不存在")
+        # 兼容 pdf_upload/pdf_to_images 两种类型
+        if task["type"] == "pdf_upload":
+            pdf_name = task["data"].get("original_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "pdf_to_images":
+            pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+        else:
+            raise HTTPException(status_code=400, detail="不支持的任务类型")
+    if not pdf_name:
+        raise HTTPException(status_code=400, detail="请提供task_id或pdf_name")
     subdir = IMG_DIR / pdf_name
     if not subdir.exists() or not subdir.is_dir():
         raise HTTPException(status_code=404, detail="对应的 PDF 图片目录不存在")
-
     try:
         # 创建临时目录并压缩
         tmp_dir = tempfile.mkdtemp()
         zip_path = Path(tmp_dir) / f"{pdf_name}.zip"
         shutil.make_archive(str(zip_path.with_suffix("")), 'zip', root_dir=subdir)
-
         # 下载完毕后自动删除 zip 文件和临时目录
         background_tasks.add_task(shutil.rmtree, tmp_dir)
-
         return FileResponse(
             path=zip_path,
             filename=f"{pdf_name}.zip",
@@ -122,66 +149,88 @@ def add_black_borders(image_path: Path, output_path: Path, top=100, bottom=100):
     img = Image.open(image_path)
     width, height = img.size
     new_height = height + top + bottom
-
     new_img = Image.new("RGB", (width, new_height), (0, 0, 0))
     new_img.paste(img, (0, top))
     new_img.save(output_path)
 
+def process_directory(src_dir: Path, processed: list):
+    """处理单个目录下的所有图片"""
+    dst_dir = PROCESSED_IMG_DIR / src_dir.name
+    for src_path in src_dir.rglob("*.png"):
+        rel_path = src_path.relative_to(src_dir)
+        dst_path = dst_dir / rel_path
+        dst_path.parent.mkdir(parents=True, exist_ok=True)
+        add_black_borders(src_path, dst_path)
+        processed.append(f"{src_dir.name}/{str(rel_path)}")
+
 @router.get("/api/image-notes/add-black-border")
-async def add_black_border_for_pdf_images(pdf_name: str = Query(None, description="PDF 文件名，不含扩展名")):
+async def add_black_border_for_pdf_images(
+    task_id: str = Query(None, description="任务ID，推荐优先使用"),
+    pdf_name: str = Query(None, description="PDF 文件名，不含扩展名（兼容老参数）")
+):
     """
     为图片添加上下黑边
-    如果提供 pdf_name，则只处理该目录下的图片
-    否则处理 converted_images 下所有目录的图片
+    支持通过 task_id 或 pdf_name 指定目录
     """
     processed = []
-    
-    if pdf_name:
-        # 处理指定目录
-        src_dir = IMG_DIR / pdf_name
-        if not src_dir.exists():
-            raise HTTPException(status_code=404, detail="源图片目录不存在")
-        process_directory(src_dir, processed)
+    target_dir = None
+    if task_id:
+        task = task_manager.get_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="任务不存在")
+        # 兼容 pdf_upload/pdf_to_images 两种类型
+        if task["type"] == "pdf_upload":
+            pdf_name = task["data"].get("original_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "pdf_to_images":
+            pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+        else:
+            raise HTTPException(status_code=400, detail="不支持的任务类型")
+        target_dir = IMG_DIR / pdf_name
+    elif pdf_name:
+        target_dir = IMG_DIR / pdf_name
     else:
         # 处理所有目录
         for subdir in IMG_DIR.iterdir():
             if subdir.is_dir():
                 process_directory(subdir, processed)
-
+        return {
+            "message": f"图片已加黑边，共处理 {len(processed)} 张",
+            "processed_images": processed
+        }
+    if not target_dir or not target_dir.exists():
+        raise HTTPException(status_code=404, detail="源图片目录不存在")
+    process_directory(target_dir, processed)
     return {
         "message": f"图片已加黑边，共处理 {len(processed)} 张",
         "processed_images": processed
     }
 
-def process_directory(src_dir: Path, processed: list):
-    """处理单个目录下的所有图片"""
-    dst_dir = PROCESSED_IMG_DIR / src_dir.name
-    # 递归处理所有子目录
-    for src_path in src_dir.rglob("*.png"):
-        # 计算相对路径
-        rel_path = src_path.relative_to(src_dir)
-        # 创建对应的目标路径
-        dst_path = dst_dir / rel_path
-        # 确保目标目录存在
-        dst_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        # 处理图片
-        add_black_borders(src_path, dst_path)
-        processed.append(f"{src_dir.name}/{str(rel_path)}")
-
 @router.get("/api/image-notes/images")
-async def list_images(pdf_name: str = Query(None, description="PDF 文件名（不含扩展名）")):
+async def list_images(
+    task_id: str = Query(None, description="任务ID，推荐优先使用"),
+    pdf_name: str = Query(None, description="PDF 文件名（不含扩展名），兼容老参数")
+):
     """
-    获取 converted_images 目录下所有图片文件名；
-    如果提供 pdf_name，则只获取该子目录下的图片
+    获取 converted_images 目录下所有图片文件名；支持 task_id 或 pdf_name
     """
     image_list: List[str] = []
-
-    if pdf_name:
-        # 仅列出指定子目录下的图片
-        subdir = IMG_DIR / pdf_name
-        if subdir.exists() and subdir.is_dir():
-            image_list = [f"{pdf_name}/{f.name}" for f in subdir.glob("*.png")]
+    target_dir = None
+    if task_id:
+        task = task_manager.get_task(task_id)
+        if not task:
+            return {"images": [], "message": "任务不存在"}
+        if task["type"] == "pdf_upload":
+            pdf_name = task["data"].get("original_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "pdf_to_images":
+            pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+        else:
+            return {"images": [], "message": "不支持的任务类型"}
+        target_dir = IMG_DIR / pdf_name
+    elif pdf_name:
+        target_dir = IMG_DIR / pdf_name
+    if target_dir:
+        if target_dir.exists() and target_dir.is_dir():
+            image_list = [f"{target_dir.name}/{f.name}" for f in target_dir.glob("*.png")]
         else:
             return {"images": [], "message": f"未找到目录: {pdf_name}"}
     else:
@@ -190,5 +239,40 @@ async def list_images(pdf_name: str = Query(None, description="PDF 文件名（�
             if subdir.is_dir():
                 for f in subdir.glob("*.png"):
                     image_list.append(f"{subdir.name}/{f.name}")
+    return {"images": image_list}
 
+@router.get("/api/image-notes/black-bordered-images")
+async def list_black_bordered_images(
+    task_id: str = Query(None, description="任务ID，推荐优先使用"),
+    pdf_name: str = Query(None, description="PDF 文件名（不含扩展名），兼容老参数")
+):
+    """
+    获取 processed_images 目录下所有加黑边图片文件名；支持 task_id 或 pdf_name
+    """
+    image_list: List[str] = []
+    target_dir = None
+    if task_id:
+        task = task_manager.get_task(task_id)
+        if not task:
+            return {"images": [], "message": "任务不存在"}
+        if task["type"] == "pdf_upload":
+            pdf_name = task["data"].get("original_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "pdf_to_images":
+            pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+        else:
+            return {"images": [], "message": "不支持的任务类型"}
+        target_dir = PROCESSED_IMG_DIR / pdf_name
+    elif pdf_name:
+        target_dir = PROCESSED_IMG_DIR / pdf_name
+    if target_dir:
+        if target_dir.exists() and target_dir.is_dir():
+            image_list = [f"{target_dir.name}/{f.name}" for f in target_dir.glob("*.png")]
+        else:
+            return {"images": [], "message": f"未找到目录: {pdf_name}"}
+    else:
+        # 列出所有子目录中的图片
+        for subdir in PROCESSED_IMG_DIR.iterdir():
+            if subdir.is_dir():
+                for f in subdir.glob("*.png"):
+                    image_list.append(f"{subdir.name}/{f.name}")
     return {"images": image_list}
