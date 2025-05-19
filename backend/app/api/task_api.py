@@ -54,6 +54,59 @@ def get_task_progress(task_id: str):
     }
     return result
 
+@router.delete("/{task_id}")
+def delete_task_and_files(task_id: str):
+    """
+    删除任务及其相关的所有文件（PDF、图片、音频、视频等），并从Redis中移除任务。
+    """
+    import shutil, os
+    from pathlib import Path
+    task = task_manager.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    data = task.get("data", {})
+    # 1. 删除PDF文件
+    pdf_name = None
+    if task["type"] == "pdf_upload":
+        pdf_name = data.get("original_filename", "").rsplit(".", 1)[0]
+        pdf_path = Path("pdf_uploads") / data.get("original_filename", "")
+        if pdf_path.exists():
+            try:
+                pdf_path.unlink()
+            except Exception:
+                pass
+    elif task["type"] == "pdf_to_images":
+        pdf_name = data.get("pdf_filename", "").rsplit(".", 1)[0]
+    elif task["type"] == "ppt_upload":
+        pdf_name = data.get("original_filename", "").rsplit(".", 1)[0]
+    # 2. 删除图片目录
+    if pdf_name:
+        for d in ["converted_images", "processed_images"]:
+            img_dir = Path(d) / pdf_name
+            if img_dir.exists():
+                shutil.rmtree(img_dir, ignore_errors=True)
+    # 3. 删除音频/字幕目录
+    if pdf_name:
+        audio_dir = Path("srt_and_wav") / pdf_name
+        if audio_dir.exists():
+            shutil.rmtree(audio_dir, ignore_errors=True)
+    # 4. 删除视频目录
+    if pdf_name:
+        for d in ["videos", "encoded_videos"]:
+            v_dir = Path(d) / pdf_name
+            if v_dir.exists():
+                shutil.rmtree(v_dir, ignore_errors=True)
+    # 5. 删除 notes_output 目录下的文稿
+    if pdf_name:
+        notes_dir = Path("notes_output") / pdf_name
+        if notes_dir.exists():
+            shutil.rmtree(notes_dir, ignore_errors=True)
+    # 6. 从Redis中删除任务
+    import redis
+    r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+    r.delete(f"task:{task_id}")
+    return {"message": f"任务 {task_id} 及相关文件已删除"}
+
 # ================== 各阶段API中写入进度的举例 ==================
 
 # 1. PDF转图片结束时：
