@@ -19,27 +19,34 @@ class SingleTTSRequest(BaseModel):
     filename: str  # 例如 "lesson01.txt"
 
 @router.get("/texts")
-def list_txt_files(task_id: str = Query(None, description="任务ID，推荐优先使用")):
-    """获取指定任务的文本文件列表，支持task_id"""
-    files = []
+def list_txt_files(
+    task_id: str = Query(None, description="任务ID"),
+    filename: str = Query(None, description="文件名/目录名")
+):
+    notes_dir = Path(NOTES_DIR)
+    subdir = None
     if task_id:
         task = task_manager.get_task(task_id)
         if not task:
             return []
         if task["type"] == "pdf_upload":
-            pdf_name = task["data"].get("original_filename", "").rsplit(".", 1)[0]
+            subdir = task["data"].get("original_filename", "").rsplit(".", 1)[0]
         elif task["type"] == "pdf_to_images":
-            pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+            subdir = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "ppt_upload":
+            subdir = task["data"].get("original_filename", "").rsplit(".", 1)[0]
         else:
             return []
-        target_dir = Path(NOTES_DIR) / pdf_name
+    elif filename:
+        subdir = filename
+    if subdir:
+        target_dir = notes_dir / subdir
         if target_dir.exists() and target_dir.is_dir():
             files = [f.name for f in target_dir.glob("*.txt")]
         else:
             files = []
     else:
-        # 兼容原有逻辑，返回notes_output下所有txt
-        files = [f for f in os.listdir(NOTES_DIR) if f.endswith(".txt")]
+        files = [f for f in os.listdir(notes_dir) if f.endswith(".txt")]
     return files
 
 @router.post("/set-config")
@@ -59,58 +66,48 @@ def set_voice(voice: str = Body(..., embed=True)):
 
 @router.post("/generate")
 def generate_all_audio(
-    task_id: str = Query(..., description="任务ID"),
-    use_websocket: bool = Query(False, description="是否使用WebSocket推送进度")
+    task_id: str = Query(None, description="任务ID"),
+    filename: str = Query(None, description="文件名/目录名")
 ):
-    """
-    批量生成任务下所有txt文件的音频和字幕，支持流式/WS推送进度。
-    """
-    import json
-    task = task_manager.get_task(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="任务不存在")
-    if task["type"] == "pdf_upload":
-        pdf_name = task["data"].get("original_filename", "").rsplit(".", 1)[0]
-    elif task["type"] == "pdf_to_images":
-        pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+    notes_dir = Path(NOTES_DIR)
+    subdir = None
+    if task_id:
+        task = task_manager.get_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="任务不存在")
+        if task["type"] == "pdf_upload":
+            subdir = task["data"].get("original_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "pdf_to_images":
+            subdir = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "ppt_upload":
+            subdir = task["data"].get("original_filename", "").rsplit(".", 1)[0]
+        else:
+            raise HTTPException(status_code=400, detail="不支持的任务类型")
+    elif filename:
+        subdir = filename
+    if subdir:
+        notes_dir = notes_dir / subdir
+        output_dir = Path(AUDIO_OUTPUT_DIR) / subdir
+        output_dir.mkdir(parents=True, exist_ok=True)
+        if not notes_dir.exists() or not notes_dir.is_dir():
+            raise HTTPException(status_code=404, detail="任务文稿目录不存在")
+        raw_txt = [f for f in notes_dir.glob("*.txt")]
     else:
-        raise HTTPException(status_code=400, detail="不支持的任务类型")
-    notes_dir = Path(NOTES_DIR) / pdf_name
-    output_dir = Path(AUDIO_OUTPUT_DIR) / pdf_name
-    output_dir.mkdir(parents=True, exist_ok=True)
-    if not notes_dir.exists() or not notes_dir.is_dir():
-        raise HTTPException(status_code=404, detail="任务文稿目录不存在")
-    raw_txt = [f for f in notes_dir.glob("*.txt")]
+        output_dir = Path(AUDIO_OUTPUT_DIR)
+        raw_txt = find_txt_files(NOTES_DIR)
     raw_txt.sort()
-    total = len(raw_txt)
-    if total == 0:
-        raise HTTPException(status_code=400, detail="没有可处理的文件")
-    def generate():
-        for idx, path in enumerate(raw_txt, 1):
-            try:
-                tts(path, output_dir=str(output_dir))
-                wav_name = path.stem + ".wav"
-                srt_name = path.stem + "_merged.srt"
-                audio_path = output_dir / wav_name
-                srt_path = output_dir / srt_name
-                result = {
-                    "filename": path.name,
-                    "audio_file": audio_path.name if audio_path.exists() else None,
-                    "subtitle_file": srt_path.name if srt_path.exists() else None,
-                    "status": "success",
-                    "progress": int(idx / total * 100)
-                }
-            except Exception as e:
-                result = {
-                    "filename": path.name,
-                    "audio_file": None,
-                    "subtitle_file": None,
-                    "status": "failed",
-                    "error": str(e),
-                    "progress": int(idx / total * 100)
-                }
-            yield json.dumps(result).encode() + b"\n"
-    return StreamingResponse(generate(), media_type="application/x-ndjson")
+    for path in raw_txt:
+        try:
+            tts(path, output_dir=str(output_dir))
+        except Exception as e:
+            print(f"[错误] 处理文件 {path} 时出错: {e}")
+    files = os.listdir(output_dir)
+    audio_files = [f for f in files if f.endswith(".wav")]
+    srt_files = [f for f in files if f.endswith("_merged.srt")]
+    return {
+        "audio_files": audio_files,
+        "subtitle_files": srt_files
+    }
 
 @router.websocket("/ws/generate/{task_id}")
 async def ws_generate_all_audio(websocket: WebSocket, task_id: str):

@@ -19,9 +19,9 @@ def save_txt_to_notes_dir(filename: str, content: str):
 @router.get("/api/notes/all")
 async def list_all_txt_files():
     """
-    返回 notes_output 目录下所有 .txt 文件的文件名列表
+    返回 notes_output 目录下所有子目录及其 .txt 文件的相对路径列表
     """
-    txt_files = [file.name for file in NOTES_DIR.glob("*.txt")]
+    txt_files = [str(file.relative_to(NOTES_DIR)) for file in NOTES_DIR.rglob("*.txt")]
     return {"files": txt_files}
 
 @router.get("/api/notes/{filename}")

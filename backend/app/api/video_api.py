@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 from app.utils.transcoding import encode_video, get_video_info
 import shutil
+from app.utils.task_manager import task_manager
 print(shutil.which("ffmpeg"))
 print("当前 PATH：")
 for p in os.environ["PATH"].split(";"):
@@ -79,25 +80,47 @@ async def send_progress(task: str, data: dict):
 
 @router.post("/upload-multiple")
 async def upload_multiple_videos(
-    task: str = Query(..., description="任务名称（PDF文件名）"),
+    task_id: str = Query(None, description="任务ID"),
+    filename: str = Query(None, description="文件名/目录名"),
     files: List[UploadFile] = File(...)
 ):
     """
-    批量上传视频文件到指定任务的目录
+    批量上传视频文件到指定任务的目录，支持task_id和filename双入口。
+    优先使用task_id，若没有则使用filename。
     """
-    # 创建任务目录
-    task_dir = VIDEO_DIR / task
+    pdf_name = None
+    if task_id:
+        task = task_manager.get_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="任务不存在")
+        if task["type"] == "pdf_upload":
+            pdf_name = task["data"].get("original_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "pdf_to_images":
+            pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+        else:
+            raise HTTPException(status_code=400, detail="不支持的任务类型")
+    elif filename:
+        pdf_name = filename
+    else:
+        raise HTTPException(status_code=400, detail="请提供task_id或filename参数")
+    # 以pdf_name为目录名
+    task_dir = VIDEO_DIR / pdf_name
     task_dir.mkdir(parents=True, exist_ok=True)
-
     saved_files = []
     for file in files:
         file_path = task_dir / file.filename
         with open(file_path, "wb") as f:
             shutil.copyfileobj(file.file, f)
         saved_files.append(file.filename)
-    
+    # 绑定到任务
+    if task_id:
+        task_data = task.get("data", {})
+        video_list = task_data.get("videos", [])
+        video_list.extend(saved_files)
+        task_data["videos"] = list(set(video_list))
+        task_manager.update_task(task_id, data=task_data)
     return {
-        "task": task,
+        "task_id": task_id,
         "uploaded": saved_files,
         "directory": str(task_dir)
     }
@@ -134,14 +157,13 @@ async def get_all_videos():
 
 @router.post("/transcode")
 async def transcode_video(
-    task: str = Query(..., description="任务名称（PDF文件名）"),
+    task_id: str = Query(None, description="任务ID"),
+    filename: str = Query(None, description="文件名/目录名"),
     background_tasks: BackgroundTasks = None
 ):
     """
-    转码指定任务目录下的所有视频文件
-    使用后台任务处理，避免阻塞
-    转码后的视频保存在 encoded_videos 目录下，保持相同的目录结构
-    通过 WebSocket 实时推送进度
+    转码指定任务目录下的所有视频文件，支持task_id和filename双入口。
+    优先使用task_id，若没有则使用filename。
     """
     # 检查 ffmpeg 是否可用
     if not check_ffmpeg():
@@ -149,15 +171,27 @@ async def transcode_video(
             status_code=500,
             detail="ffmpeg 未安装或不可用。请先安装 ffmpeg 并确保其在系统路径中。"
         )
-
-    task_dir = VIDEO_DIR / task
+    pdf_name = None
+    if task_id:
+        task = task_manager.get_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="任务不存在")
+        if task["type"] == "pdf_upload":
+            pdf_name = task["data"].get("original_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "pdf_to_images":
+            pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+        else:
+            raise HTTPException(status_code=400, detail="不支持的任务类型")
+    elif filename:
+        pdf_name = filename
+    else:
+        raise HTTPException(status_code=400, detail="请提供task_id或filename参数")
+    task_dir = VIDEO_DIR / pdf_name
     if not task_dir.exists() or not task_dir.is_dir():
         raise HTTPException(status_code=404, detail="任务目录不存在")
-
     # 创建对应的输出目录
-    output_dir = ENCODED_VIDEO_DIR / task
+    output_dir = ENCODED_VIDEO_DIR / pdf_name
     output_dir.mkdir(parents=True, exist_ok=True)
-
     # 获取所有需要转码的视频
     videos_to_process = []
     for video_file in task_dir.glob("*.mp4"):
@@ -165,142 +199,103 @@ async def transcode_video(
             output_path = output_dir / f"encoded_{video_file.name}"
             if not output_path.exists():  # 只处理未转码的视频
                 videos_to_process.append((video_file, output_path))
-
     if not videos_to_process:
         return {"message": "没有需要转码的视频文件"}
-
     # 初始化任务状态
-    transcoding_tasks[task] = {
+    transcoding_tasks[pdf_name] = {
         "status": "processing",
         "total": len(videos_to_process),
         "completed": 0,
         "results": []
     }
-    
     # 发送初始状态
-    await send_progress(task, transcoding_tasks[task])
-
+    await send_progress(pdf_name, transcoding_tasks[pdf_name])
     # 在后台处理转码
     async def process_videos():
         try:
-            print(f"\n开始处理任务 {task} 的转码...")
-            print(f"输入目录: {task_dir}")
-            print(f"输入目录(原始字符串): {str(task_dir)}")
-            print(f"输入目录(字节): {str(task_dir).encode()}")
-            print(f"输出目录: {output_dir}")
-            print(f"总共需要处理 {len(videos_to_process)} 个视频文件")
-            
             for index, (input_path, output_path) in enumerate(videos_to_process, 1):
                 try:
-                    print(f"\n[{index}/{len(videos_to_process)}] 正在处理: {input_path.name}")
-                    print(f"输入文件路径: {input_path}")
-                    print(f"输入文件路径(原始字符串): {str(input_path)}")
-                    print(f"输入文件路径(字节): {str(input_path).encode()}")
-                    print(f"输入文件路径(绝对路径): {input_path.absolute()}")
-                    print(f"输出文件路径: {output_path}")
-                    
-                    # 检查输入文件是否存在
                     if not input_path.exists():
-                        print(f"文件不存在，尝试列出目录内容:")
-                        try:
-                            print(f"目录内容: {list(input_path.parent.iterdir())}")
-                        except Exception as e:
-                            print(f"列出目录内容失败: {str(e)}")
                         raise FileNotFoundError(f"输入文件不存在: {input_path}")
-                    
-                    # 确保输出目录存在
                     output_path.parent.mkdir(parents=True, exist_ok=True)
-                    
-                    # 获取视频信息
                     info = get_video_info(str(input_path))
-                    if info:
-                        print(f"视频信息: {info['width']}x{info['height']}, 时长: {info['duration']:.2f}秒")
-                        
-                        # 执行转码
-                        print("开始转码...")
-                        if encode_video(str(input_path), str(output_path)):
-                            result = {
-                                "input": input_path.name,
-                                "output": output_path.name,
-                                "status": "success",
-                                "info": info
-                            }
-                            print(f"✓ 转码成功: {output_path.name}")
-                        else:
-                            result = {
-                                "input": input_path.name,
-                                "status": "failed",
-                                "error": "转码失败"
-                            }
-                            print(f"✗ 转码失败: {input_path.name}")
-                    transcoding_tasks[task]["results"].append(result)
-                except FileNotFoundError as e:
-                    result = {
-                        "input": input_path.name,
-                        "status": "failed",
-                        "error": f"文件不存在: {str(e)}"
-                    }
-                    transcoding_tasks[task]["results"].append(result)
-                    print(f"✗ 文件错误: {str(e)}")
+                    if info and encode_video(str(input_path), str(output_path)):
+                        result = {
+                            "input": input_path.name,
+                            "output": output_path.name,
+                            "status": "success",
+                            "info": info
+                        }
+                    else:
+                        result = {
+                            "input": input_path.name,
+                            "status": "failed",
+                            "error": "转码失败"
+                        }
+                    transcoding_tasks[pdf_name]["results"].append(result)
                 except Exception as e:
                     result = {
                         "input": input_path.name,
                         "status": "failed",
                         "error": str(e)
                     }
-                    transcoding_tasks[task]["results"].append(result)
-                    print(f"✗ 处理出错: {str(e)}")
+                    transcoding_tasks[pdf_name]["results"].append(result)
                 finally:
-                    transcoding_tasks[task]["completed"] += 1
-                    progress = (transcoding_tasks[task]["completed"] / transcoding_tasks[task]["total"]) * 100
-                    print(f"总体进度: {progress:.1f}%")
-                    # 发送进度更新
-                    await send_progress(task, transcoding_tasks[task])
-
-            # 更新任务状态
-            transcoding_tasks[task]["status"] = "completed"
-            print(f"\n任务 {task} 转码完成！")
-            print(f"成功: {sum(1 for r in transcoding_tasks[task]['results'] if r['status'] == 'success')}")
-            print(f"失败: {sum(1 for r in transcoding_tasks[task]['results'] if r['status'] == 'failed')}")
-            await send_progress(task, transcoding_tasks[task])
+                    transcoding_tasks[pdf_name]["completed"] += 1
+                    await send_progress(pdf_name, transcoding_tasks[pdf_name])
+            transcoding_tasks[pdf_name]["status"] = "completed"
+            await send_progress(pdf_name, transcoding_tasks[pdf_name])
         except Exception as e:
-            transcoding_tasks[task]["status"] = "failed"
-            transcoding_tasks[task]["error"] = str(e)
-            print(f"\n任务 {task} 转码失败: {str(e)}")
-            await send_progress(task, transcoding_tasks[task])
-
-    # 添加后台任务
+            transcoding_tasks[pdf_name]["status"] = "failed"
+            transcoding_tasks[pdf_name]["error"] = str(e)
+            await send_progress(pdf_name, transcoding_tasks[pdf_name])
     background_tasks.add_task(process_videos)
-
     return {
         "message": f"开始转码 {len(videos_to_process)} 个视频文件",
-        "task": task,
+        "task": pdf_name,
         "output_directory": str(output_dir),
         "videos_to_process": [v[0].name for v in videos_to_process],
-        "websocket_url": f"ws://localhost:8000/api/videos/ws/transcode/{task}"
+        "websocket_url": f"ws://localhost:8000/api/videos/ws/transcode/{pdf_name}"
     }
 
 @router.get("/download")
 async def download_encoded_videos(
-    task: str = Query(..., description="视频任务名称（子目录名）"),
+    task_id: str = Query(None, description="任务ID"),
+    filename: str = Query(None, description="文件名/目录名"),
     background_tasks: BackgroundTasks = None
 ):
-    task_dir = ENCODED_VIDEO_DIR / task
+    """
+    下载指定任务目录下的所有转码后视频，打包为zip，支持task_id和filename双入口。
+    优先使用task_id，若没有则使用filename。
+    """
+    pdf_name = None
+    if task_id:
+        task = task_manager.get_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="任务不存在")
+        if task["type"] == "pdf_upload":
+            pdf_name = task["data"].get("original_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "pdf_to_images":
+            pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+        else:
+            raise HTTPException(status_code=400, detail="不支持的任务类型")
+    elif filename:
+        pdf_name = filename
+    else:
+        raise HTTPException(status_code=400, detail="请提供task_id或filename参数")
+    task_dir = ENCODED_VIDEO_DIR / pdf_name
     if not task_dir.exists() or not task_dir.is_dir():
         raise HTTPException(status_code=404, detail="任务目录不存在")
-
     try:
         # 创建临时 zip 文件
         tmp_dir = tempfile.mkdtemp()
-        zip_path = Path(tmp_dir) / f"{task}.zip"
+        zip_path = Path(tmp_dir) / f"{pdf_name}.zip"
         shutil.make_archive(str(zip_path.with_suffix("")), 'zip', root_dir=task_dir)
-
         # 下载完自动清理
         background_tasks.add_task(shutil.rmtree, tmp_dir)
-
         return FileResponse(
             path=zip_path,
-            filename=f"{task}.zip",
+            filename=f"{pdf_name}.zip",
             media_type="application/zip"
         )
     except Exception as e:

@@ -8,8 +8,10 @@ from pydantic import BaseModel
 from typing import List
 # from fastapi_limiter import FastAPILimiter
 # import redis.asyncio as redis
+import redis
 
 from app.utils.ppt_parser import extract_notes
+from app.utils.task_manager import task_manager, TaskStatus
 
 from app.api import pdf_api
 from app.api import tts_api
@@ -78,6 +80,9 @@ async def root():
 def list_projects() -> List[Project]:
     return projects
 
+# 连接 Redis（与 task_manager 保持一致）
+r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+
 @app.post("/api/v1/projects/upload")
 async def upload_pptx(file: UploadFile = File(...)):
     if not file.filename.endswith(".pptx"):
@@ -89,6 +94,19 @@ async def upload_pptx(file: UploadFile = File(...)):
     with open(file_path, "wb") as f:
         f.write(await file.read())
 
+    # 创建任务id
+    task_id = task_manager.create_task(
+        task_type="ppt_upload",
+        initial_data={
+            "original_filename": file.filename,
+            "project_id": project_id,
+            "ppt_path": file_path,
+            "status": "uploaded"
+        }
+    )
+    # 存project_id和task_id的映射，便于后续查找
+    r.set(f"project_task:{project_id}", task_id)
+
     project = Project(
         id=project_id,
         name=file.filename,
@@ -97,18 +115,36 @@ async def upload_pptx(file: UploadFile = File(...)):
     )
     projects.append(project)
 
-    return {"message": "上传成功", "id": project_id}
+    return {"message": "上传成功", "id": project_id, "task_id": task_id}
 
 @app.post("/api/v1/projects/{project_id}/extract")
-def extract_notes_for_project(project_id: str):
+def extract_notes_for_project(project_id: str, task_id: str = None):
     project = next((p for p in projects if p.id == project_id), None)
     if not project:
         return {"error": "项目不存在"}
 
-    output_path = os.path.join(OUTPUT_DIR, project_id)
+    # 优先用传入的task_id，否则用project_id查找
+    if not task_id:
+        # 尝试查找与project_id相关的task_id
+        found = None
+        for tid, t in task_manager.list_tasks().items():
+            if t["type"] == "ppt_upload" and t["data"].get("project_id") == project_id:
+                found = tid
+                break
+        task_id = found
+    if not task_id:
+        return {"error": "未找到对应的task_id"}
+
+    output_path = os.path.join(OUTPUT_DIR, task_id)
     notes = extract_notes(project.file_path, output_path)
+    # 写入任务进度
+    task = task_manager.get_task(task_id)
+    task_data = task.get("data", {})
+    task_data["notes_generate"] = {"status": "completed", "progress": 100, "notes_count": len(notes)}
+    task_manager.update_task(task_id, data=task_data)
     return {
         "message": "提取成功",
-        "notes": notes
+        "notes": notes,
+        "task_id": task_id
     }
 
