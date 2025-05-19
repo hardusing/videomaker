@@ -3,9 +3,9 @@
 ## 环境要求
 
 - Python 3.8+
-- MySQL 5.7+
-- Redis 6.0+
-- Tesseract-OCR
+- MySQL 5.7+（如需数据库功能）
+- Redis 6.0+（任务管理依赖）
+- Tesseract-OCR（如需OCR功能）
 
 ## 安装步骤
 
@@ -30,8 +30,23 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-4. 配置环境变量：
-创建 `.env` 文件并配置以下参数：
+如需导出当前所有依赖（推荐开发后执行）：
+```bash
+pip freeze > requirements.txt
+```
+
+4. 启动 Redis 服务（本地或容器均可）：
+- 本地启动：
+```bash
+redis-server
+```
+- Docker 启动：
+```bash
+docker run -d --name myredis -p 6379:6379 redis
+```
+
+5. 配置环境变量：
+创建 `.env` 文件并配置以下参数（如需数据库等功能）：
 ```env
 # 数据库配置
 DB_HOST=127.0.0.1
@@ -46,7 +61,7 @@ OPENAI_API_KEY=your_key
 
 ## 启动服务
 
-3. 启动后端服务：
+6. 启动后端服务：
 ```bash
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
@@ -54,6 +69,31 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 服务启动后，可以通过以下地址访问：
 - API 文档：http://localhost:8000/docs
 - 后端服务：http://localhost:8000
+
+## 主要API说明
+
+### PDF上传
+```
+POST /api/pdf/upload
+```
+返回：`task_id`，用于后续操作。
+
+### PDF转图片（流式返回图片ID和缩略图）
+```
+POST /api/pdf/convert/{task_id}
+```
+每生成一张图片，流式返回：
+- image_id：唯一图片ID
+- image_path：图片相对路径
+- thumbnail：base64缩略图（前端可直接预览）
+- progress/current_page/total_pages/task_id
+
+前端可用 fetch/流式读取，或 WebSocket 方式（见源码）。
+
+### 任务状态查询
+```
+GET /api/tasks/{task_id}
+```
 
 ## 目录结构
 
@@ -74,14 +114,22 @@ backend/
 
 ## 常见问题
 
-1. 如果遇到数据库连接错误，请检查：
+1. **Redis连接失败**：
+   - 请确保 Redis 服务已启动，且端口映射正确（如用 Docker，需 `-p 6379:6379`）。
+   - 代码默认连接 `localhost:6379`，如有变动请在 `task_manager.py` 中调整。
+
+2. **数据库连接错误**：
    - MySQL 服务是否运行
    - 数据库配置是否正确
    - 数据库和表是否已创建
 
-3. 如果遇到文件上传错误，请确保：
+3. **文件上传/转换错误**：
    - 相关目录具有写入权限
    - 磁盘空间充足
+
+4. **依赖问题**：
+   - 可用 `pip freeze > requirements.txt` 导出依赖
+   - 安装依赖时如遇报错，建议升级 pip 或单独安装缺失包
 
 ## API 文档
 

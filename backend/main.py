@@ -17,6 +17,7 @@ from app.api import download_api
 from app.api import notes_api
 from app.api import image_notes_api
 from app.api import video_api
+from app.api import task_api
 # ===================== 配置与数据结构 =====================
 from dotenv import load_dotenv
 load_dotenv()
@@ -39,7 +40,7 @@ class Project(BaseModel):
 
 # ===================== 初始化 FastAPI =====================
 
-app = FastAPI()
+app = FastAPI(title="视频制作 API")
 # CORS 中间件
 app.add_middleware(
     CORSMiddleware,
@@ -55,6 +56,7 @@ app.include_router(download_api.router)
 app.include_router(notes_api.router)
 app.include_router(image_notes_api.router)
 app.include_router(video_api.router)
+app.include_router(task_api.router)
 # ✅ 挂载静态目录供前端访问音频和字幕
 app.mount("/srt_and_wav", StaticFiles(directory=AUDIO_OUTPUT_DIR), name="audio")
 
@@ -68,7 +70,7 @@ async def startup():
 @app.get("/")
 # @app.get("/", dependencies=[RateLimiter(times=2, seconds=5)])
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "视频制作 API 服务正在运行"}
 
 # ===================== 项目相关接口 =====================
 
