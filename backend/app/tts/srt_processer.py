@@ -111,9 +111,9 @@ def process_srt(input_file, output_file, min_length=12):
     with open(output_file, "w", encoding="utf-8") as f:
         f.write("\n".join(output_content))
 
-    print(f"处理完成")
-    print(f"原始字幕数: {len(original_subs)}")
-    print(f"处理后字幕数: {len(processed_subs)}")
+    # print(f"处理完成")
+    # print(f"原始字幕数: {len(original_subs)}")
+    # print(f"处理后字幕数: {len(processed_subs)}")
 
 
 if __name__ == "__main__":

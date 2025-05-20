@@ -87,7 +87,7 @@ def text_to_speech_with_subtitle(
         result = speech_synthesizer.speak_text_async(text).get()
 
         if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
-            print(f"Speech synthesized for text [{text}]")
+            #print(f"Speech synthesized for text [{text}]")
             # Generate subtitle file
             create_srt(word_boundaries, srt_path)
             print(f"Audio saved to: {audio_path}")
@@ -182,7 +182,7 @@ def controlable_text_to_speech_with_subtitle(
         result = speech_synthesizer.speak_ssml_async(ssml).get()
 
         if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
-            print(f"Speech synthesized for text [{text}]")
+            #print(f"Speech synthesized for text [{text}]")
             create_srt(word_boundaries, srt_path)
             print(f"Audio saved to: {audio_path}")
             print(f"Subtitle saved to: {srt_path}")

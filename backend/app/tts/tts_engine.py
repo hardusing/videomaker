@@ -44,11 +44,11 @@ def tts(filename, output_dir="./srt_and_wav"):
             rate="-10%",
             punctuation_breaks=custom_breaks,
         )
-        print("✅ 合成完成，检查 SRT：", srt_path)
+        #print("✅ 合成完成，检查 SRT：", srt_path)
 
         if os.path.exists(srt_path):
             process_srt(srt_path, merged_srt_path)
-            print(f"✅ 成功生成：{merged_srt_path}")
+            #print(f"✅ 成功生成：{merged_srt_path}")
         else:
             print(f"❌ 错误：SRT 文件未生成：{srt_path}")
 

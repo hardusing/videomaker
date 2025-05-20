@@ -11,12 +11,12 @@ import tempfile
 from app.utils.transcoding import encode_video, get_video_info
 import shutil
 from app.utils.task_manager import task_manager
-print(shutil.which("ffmpeg"))
-print("当前 PATH：")
-for p in os.environ["PATH"].split(";"):
-    print("-", p)
+# print(shutil.which("ffmpeg"))
+# print("当前 PATH：")
+# for p in os.environ["PATH"].split(";"):
+#     print("-", p)
 
-print("是否能找到 ffmpeg：", shutil.which("ffmpeg"))
+# print("是否能找到 ffmpeg：", shutil.which("ffmpeg"))
 router = APIRouter(prefix="/api/videos", tags=["视频管理"])
 
 VIDEO_DIR = Path("./videos")
@@ -46,25 +46,31 @@ def check_ffmpeg():
 transcoding_tasks: Dict[str, dict] = {}
 active_connections: Dict[str, WebSocket] = {}
 
-@router.websocket("/ws/transcode/{task}")
-async def websocket_endpoint(websocket: WebSocket, task: str):
+@router.websocket("/ws/transcode")
+async def websocket_endpoint(websocket: WebSocket):
     """
-    WebSocket 连接端点，用于实时推送转码进度
+    WebSocket 连接端点，推送所有转码任务的进度（如有多个任务可全部推送，或只推送最新一次的进度）
     """
     await websocket.accept()
-    active_connections[task] = websocket
-    
     try:
-        # 如果任务已存在，立即发送当前状态
-        if task in transcoding_tasks:
-            await websocket.send_json(transcoding_tasks[task])
-        
-        # 保持连接直到客户端断开
+        # 监听所有转码任务的进度变化
+        # 这里只推送最新一次的转码任务进度（可根据实际需求调整）
+        import asyncio
+        last_status = None
         while True:
-            await websocket.receive_text()
+            # 获取所有转码任务的进度
+            if transcoding_tasks:
+                # 只推送最新的一个任务（按字典顺序）
+                latest_task = sorted(transcoding_tasks.keys())[-1]
+                status = transcoding_tasks[latest_task]
+                if status != last_status:
+                    await websocket.send_json({"task": latest_task, "progress": status})
+                    last_status = status.copy() if isinstance(status, dict) else status
+            await asyncio.sleep(1)
     except WebSocketDisconnect:
-        if task in active_connections:
-            del active_connections[task]
+        pass
+    except Exception as e:
+        await websocket.close()
 
 async def send_progress(task: str, data: dict):
     """
@@ -273,7 +279,7 @@ async def transcode_video(
         "task": pdf_name,
         "output_directory": str(output_dir),
         "videos_to_process": [v[0].name for v in videos_to_process],
-        "websocket_url": f"ws://localhost:8000/api/videos/ws/transcode/{pdf_name}"
+        "websocket_url": f"ws://localhost:8000/api/videos/ws/transcode"
     }
 
 @router.get("/download")
