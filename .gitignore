@@ -165,3 +165,14 @@ cython_debug/
 node_modules/
 
 backend/fastapi.tar
+
+# 多媒体及中间产物目录
+notes_output/
+pdf_uploads/
+videos/
+encoded_videos/
+srt_and_wav/
+processed_images/
+converted_images/
+uploads/
+temp_zip/

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Body, Query, Form
+from fastapi import APIRouter, HTTPException, Body, Query, Form, Path
 from pathlib import Path
 import openai
 import os
@@ -50,7 +50,6 @@ async def list_all_txt_files(
 
 @router.get("/api/notes/{filename}")
 async def get_txt_file_content(
-    filename: str = Query(..., description="文件名（不含目录）"),
     task_id: str = Query(None, description="任务ID，可选"),
     dir_name: str = Query(None, description="目录名，可选")
 ):
@@ -83,7 +82,6 @@ async def get_txt_file_content(
 
 @router.post("/api/notes/rewrite")
 async def rewrite_txt_file(
-    filename: str = Form(..., description="目标 .txt 文件名"),
     task_id: str = Form(None, description="任务ID，可选"),
     dir_name: str = Form(None, description="目录名，可选"),
     prompt: str = Form("请将下列文字整理为简洁通顺的日文文稿", description="OpenAI 使用的提示词")
@@ -138,7 +136,6 @@ async def rewrite_txt_file(
 
 @router.delete("/api/notes/{filename}")
 async def delete_txt_file(
-    filename: str = Query(..., description="文件名（不含目录）"),
     task_id: str = Query(None, description="任务ID，可选"),
     dir_name: str = Query(None, description="目录名，可选")
 ):
