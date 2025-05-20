@@ -121,7 +121,7 @@ async def convert_pdf_to_images(task_id: str):
                 progress = int((i / total_pages) * 100)
                 task_manager.update_task_progress(convert_task_id, progress)
                 # 生成唯一图片ID
-                image_id = str(uuid.uuid4())
+                image_id = str(i)
                 img_path = output_subdir / f"{image_id}.png"
                 pix = page.get_pixmap(dpi=200)
                 pix.save(str(img_path))
