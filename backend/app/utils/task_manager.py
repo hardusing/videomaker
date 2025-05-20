@@ -59,5 +59,16 @@ class TaskManager:
                     result[task["id"]] = task
         return result
 
+    def get_task_id_by_filename(self, filename: str) -> str:
+        """根据文件名获取对应的 task_id"""
+        keys = r.keys("task:*")
+        for key in keys:
+            data = r.get(key)
+            if data:
+                task = json.loads(data)
+                if task["type"] == "pdf_upload" and task["data"].get("original_filename") == filename:
+                    return task["id"]
+        return None
+
 # 创建全局任务管理器实例
 task_manager = TaskManager() 

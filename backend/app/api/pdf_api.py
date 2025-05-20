@@ -65,12 +65,15 @@ async def upload_pdf(file: UploadFile = File(...)) -> Dict[str, Any]:
         task_manager.update_task_status(task_id, TaskStatus.FAILED, str(e))
         raise HTTPException(status_code=500, detail=f"上传失败: {str(e)}")
 
-@router.get("/upload/list", response_model=List[str])
+@router.get("/upload/list", response_model=List[Dict[str, str]])
 async def list_uploaded_files():
-    """获取上传目录下所有 PDF 文件名"""
+    """获取上传目录下所有 PDF 文件名及其对应的 task_id"""
     if not UPLOAD_DIR.exists():
         raise HTTPException(status_code=404, detail="上传目录不存在")
-    files = [f.name for f in UPLOAD_DIR.glob("*.pdf")]
+    files = []
+    for f in UPLOAD_DIR.glob("*.pdf"):
+        task_id = task_manager.get_task_id_by_filename(f.name)
+        files.append({"filename": f.name, "task_id": task_id})
     return files
 
 @router.delete("/upload/delete/{filename}")
