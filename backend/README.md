@@ -134,3 +134,21 @@ backend/
 ## API 文档
 
 启动服务后，访问 http://localhost:8000/docs 查看完整的 API 文档。
+
+# 后端服务启动指南
+
+## 环境要求
+- Python 3.8 或更高版本
+- 安装依赖包：`pip install -r requirements.txt`
+
+## 启动步骤
+1. 进入 backend 目录：`cd backend`
+2. 启动服务：`uvicorn app.main:app --reload --host 0.0.0.0 --port 8000`
+
+## 访问服务
+- 服务启动后，访问 `http://localhost:8000/docs` 查看 API 文档
+- 默认端口为 8000，可在启动命令中修改
+
+## 其他说明
+- 服务支持热重载，修改代码后自动重启
+- 如需修改端口，请调整启动命令中的 `--port` 参数
