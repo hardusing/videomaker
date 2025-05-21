@@ -14,6 +14,8 @@ from PIL import Image
 import base64
 import io
 import uuid
+from os.path import abspath
+import comtypes.client
 
 router = APIRouter(prefix="/api/pdf", tags=["PDF 操作"])
 
@@ -24,6 +26,28 @@ IMG_DIR = BASE_DIR / "converted_images"
 
 IMG_DIR.mkdir(parents=True, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+def pptx_to_pdf(pptx_path, pdf_path):
+    powerpoint = comtypes.client.CreateObject("Powerpoint.Application")
+    powerpoint.Visible = 1
+
+    # 使用绝对路径
+    pptx_path = abspath(pptx_path)
+    pdf_path = abspath(pdf_path)
+
+    deck = powerpoint.Presentations.Open(pptx_path)
+    deck.SaveAs(pdf_path, FileFormat=32)  # 32 for PDF format
+    deck.Close()
+    powerpoint.Quit()
+
+def convert_folder_pptx_to_pdf(folder_path):
+    for filename in os.listdir(folder_path):
+        if filename.endswith(".pptx"):
+            pptx_path = os.path.join(folder_path, filename)
+            print(pptx_path)
+            pdf_path = os.path.join(folder_path, filename.replace(".pptx", ".pdf"))
+            pptx_to_pdf(pptx_path, pdf_path)
+            print(f"Converted {filename} to PDF.")
 
 @router.post("/upload")
 async def upload_pdf(file: UploadFile = File(...)) -> Dict[str, Any]:
@@ -316,3 +340,52 @@ async def websocket_convert_pdf(websocket: WebSocket, task_id: str):
         await websocket.send_json({"error": str(e)})
     finally:
         await websocket.close()
+
+@router.post("/convert-ppt-to-pdf")
+async def convert_ppt_to_pdf(file: UploadFile = File(...)) -> Dict[str, Any]:
+    if not file.filename.endswith(".pptx"):
+        raise HTTPException(status_code=400, detail="只支持 PPTX 文件")
+
+    # 创建新任务
+    task_id = task_manager.create_task(
+        task_type="ppt_to_pdf",
+        initial_data={
+            "original_filename": file.filename,
+            "status": "uploading"
+        }
+    )
+
+    try:
+        # 保存文件
+        save_path = Path(UPLOAD_DIR) / file.filename
+        with open(save_path, "wb") as f:
+            f.write(await file.read())
+
+        # 转换为 PDF
+        pdf_path = save_path.with_suffix(".pdf")
+        pptx_to_pdf(str(save_path), str(pdf_path))
+
+        # 删除 PPT 文件
+        os.remove(save_path)
+
+        # 更新任务状态
+        task_manager.update_task(
+            task_id,
+            status=TaskStatus.COMPLETED,
+            data={
+                "original_filename": file.filename,
+                "saved_path": str(save_path),
+                "pdf_path": str(pdf_path),
+                "file_size": os.path.getsize(save_path)
+            }
+        )
+
+        return {
+            "message": "转换成功",
+            "filename": file.filename,
+            "pdf_path": str(pdf_path),
+            "task_id": task_id
+        }
+    except Exception as e:
+        task_manager.update_task_status(task_id, TaskStatus.FAILED, str(e))
+        raise HTTPException(status_code=500, detail=f"转换失败: {str(e)}")
