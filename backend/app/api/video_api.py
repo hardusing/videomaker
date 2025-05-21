@@ -11,12 +11,7 @@ import tempfile
 from app.utils.transcoding import encode_video, get_video_info
 import shutil
 from app.utils.task_manager import task_manager
-# print(shutil.which("ffmpeg"))
-# print("当前 PATH：")
-# for p in os.environ["PATH"].split(";"):
-#     print("-", p)
 
-# print("是否能找到 ffmpeg：", shutil.which("ffmpeg"))
 router = APIRouter(prefix="/api/videos", tags=["视频管理"])
 
 VIDEO_DIR = Path("./videos")
