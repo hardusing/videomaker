@@ -66,6 +66,8 @@ app.include_router(image_notes_api.router)
 app.include_router(video_api.router)
 app.include_router(task_api.router)
 app.mount("/srt_and_wav", StaticFiles(directory=AUDIO_OUTPUT_DIR), name="audio")
+app.mount("/converted_images", StaticFiles(directory="converted_images"), name="converted_images")
+app.mount("/processed_images", StaticFiles(directory="processed_images"), name="processed_images")
 
 # ✅ 6. Redis & 项目模型初始化
 r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)

@@ -18,6 +18,11 @@ const Navbar: React.FC = () => {
         key: '/videos',
         label: <Link to="/videos">视频转码</Link>,  
       }
+      ,
+    {
+        key: '/pdf',
+        label: <Link to="/pdf">PDFから写真生成</Link>,  
+      }
   ]
 
   return (
