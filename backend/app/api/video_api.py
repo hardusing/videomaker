@@ -11,12 +11,7 @@ import tempfile
 from app.utils.transcoding import encode_video, get_video_info
 import shutil
 from app.utils.task_manager import task_manager
-print(shutil.which("ffmpeg"))
-print("当前 PATH：")
-for p in os.environ["PATH"].split(";"):
-    print("-", p)
 
-print("是否能找到 ffmpeg：", shutil.which("ffmpeg"))
 router = APIRouter(prefix="/api/videos", tags=["视频管理"])
 
 VIDEO_DIR = Path("./videos")
@@ -46,25 +41,31 @@ def check_ffmpeg():
 transcoding_tasks: Dict[str, dict] = {}
 active_connections: Dict[str, WebSocket] = {}
 
-@router.websocket("/ws/transcode/{task}")
-async def websocket_endpoint(websocket: WebSocket, task: str):
+@router.websocket("/ws/transcode")
+async def websocket_endpoint(websocket: WebSocket):
     """
-    WebSocket 连接端点，用于实时推送转码进度
+    WebSocket 连接端点，推送所有转码任务的进度（如有多个任务可全部推送，或只推送最新一次的进度）
     """
     await websocket.accept()
-    active_connections[task] = websocket
-    
     try:
-        # 如果任务已存在，立即发送当前状态
-        if task in transcoding_tasks:
-            await websocket.send_json(transcoding_tasks[task])
-        
-        # 保持连接直到客户端断开
+        # 监听所有转码任务的进度变化
+        # 这里只推送最新一次的转码任务进度（可根据实际需求调整）
+        import asyncio
+        last_status = None
         while True:
-            await websocket.receive_text()
+            # 获取所有转码任务的进度
+            if transcoding_tasks:
+                # 只推送最新的一个任务（按字典顺序）
+                latest_task = sorted(transcoding_tasks.keys())[-1]
+                status = transcoding_tasks[latest_task]
+                if status != last_status:
+                    await websocket.send_json({"task": latest_task, "progress": status})
+                    last_status = status.copy() if isinstance(status, dict) else status
+            await asyncio.sleep(1)
     except WebSocketDisconnect:
-        if task in active_connections:
-            del active_connections[task]
+        pass
+    except Exception as e:
+        await websocket.close()
 
 async def send_progress(task: str, data: dict):
     """
@@ -129,26 +130,32 @@ async def upload_multiple_videos(
 
 @router.get("/")
 async def get_all_videos():
+    """
+    获取所有视频文件，按任务分类返回
+    返回格式：
+    {
+        "tasks": {
+            "task1": ["video1.mp4", "video2.mp4"],
+            "task2": ["video3.mp4"]
+        }
+    }
+    """
+    if not VIDEO_DIR.exists():
+        return {"tasks": {}}
+
     tasks = {}
-    encoded = {}
+    # 遍历所有任务目录
+    for task_dir in VIDEO_DIR.iterdir():
+        if task_dir.is_dir():
+            # 获取该任务下的所有视频文件
+            videos = []
+            for f in task_dir.iterdir():
+                if f.is_file() and f.suffix.lower() == '.mp4':
+                    videos.append(f.name)
+            if videos:  # 只添加有视频的任务
+                tasks[task_dir.name] = videos
 
-    # 原始视频
-    if VIDEO_DIR.exists():
-        for td in VIDEO_DIR.iterdir():
-            if td.is_dir():
-                vids = [f.name for f in td.iterdir() if f.suffix.lower()=='.mp4']
-                if vids:
-                    tasks[td.name] = vids
-
-    # 已转码视频
-    if ENCODED_VIDEO_DIR.exists():
-        for td in ENCODED_VIDEO_DIR.iterdir():
-            if td.is_dir():
-                vids = [f.name for f in td.iterdir() if f.is_file() and f.suffix.lower()=='.mp4']
-                if vids:
-                    encoded[td.name] = vids
-
-    return {"tasks": tasks, "encoded": encoded}
+    return {"tasks": tasks}
 
 @router.post("/transcode")
 async def transcode_video(
@@ -267,99 +274,48 @@ async def transcode_video(
         "task": pdf_name,
         "output_directory": str(output_dir),
         "videos_to_process": [v[0].name for v in videos_to_process],
-        "websocket_url": f"ws://localhost:8000/api/videos/ws/transcode/{pdf_name}"
+        "websocket_url": f"ws://localhost:8000/api/videos/ws/transcode"
     }
 
 @router.get("/download")
 async def download_encoded_videos(
     task_id: str = Query(None, description="任务ID"),
     filename: str = Query(None, description="文件名/目录名"),
-    files: str    = Query(None, description="用逗号分隔的已选文件列表"),
     background_tasks: BackgroundTasks = None
 ):
     """
-    下载指定任务目录下的已转码视频，打包为 ZIP。
-    支持 task_id 或 filename 两种入口，优先使用 task_id。
-    前端传入的文件名可以是 "file.mp4" 或 "encoded_file.mp4"。
+    下载指定任务目录下的所有转码后视频，打包为zip，支持task_id和filename双入口。
+    优先使用task_id，若没有则使用filename。
     """
-
-    # 1. 确定目录名 pdf_name
+    pdf_name = None
     if task_id:
         task = task_manager.get_task(task_id)
         if not task:
             raise HTTPException(status_code=404, detail="任务不存在")
-        # 根据业务类型取原始名称
-        if task["type"] in ("pdf_upload", "pdf_to_images"):
-            key = "original_filename" if task["type"]=="pdf_upload" else "pdf_filename"
-            pdf_name = task["data"].get(key, "").rsplit(".", 1)[0]
+        if task["type"] == "pdf_upload":
+            pdf_name = task["data"].get("original_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "pdf_to_images":
+            pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
         else:
             raise HTTPException(status_code=400, detail="不支持的任务类型")
     elif filename:
         pdf_name = filename
     else:
-        raise HTTPException(status_code=400, detail="请提供 task_id 或 filename 参数")
-
-    # 2. 校验输出目录
+        raise HTTPException(status_code=400, detail="请提供task_id或filename参数")
     task_dir = ENCODED_VIDEO_DIR / pdf_name
     if not task_dir.exists() or not task_dir.is_dir():
-        raise HTTPException(status_code=404, detail="转码输出目录不存在")
-
-    # 3. 解析用户选中的文件列表（files 参数）
-    if files:
-        selected = [f for f in files.split(",") if f]
-    else:
-        # 不传 files 就下载全部
-        selected = [p.name for p in task_dir.iterdir() if p.is_file()]
-
-    # 4. 创建临时目录和 ZIP
-    tmp_dir = tempfile.mkdtemp()
-    zip_path = Path(tmp_dir) / f"{pdf_name}.zip"
-    with zipfile.ZipFile(zip_path, "w") as zf:
-        for name in selected:
-            # 兼容前端传入带/不带前缀的情况
-            if name.startswith("encoded_"):
-                real_name = name
-                arc_name  = name[len("encoded_"):]
-            else:
-                real_name = f"encoded_{name}"
-                arc_name  = name
-
-            src = task_dir / real_name
-            if not src.exists():
-                # 找不到文件就跳过
-                continue
-            # 打包时把文件写为原始名称（去掉 encoded_ 前缀）
-            zf.write(src, arcname=arc_name)
-
-    # 5. 异步删除临时目录
-    background_tasks.add_task(shutil.rmtree, tmp_dir)
-
-    # 6. 返回 ZIP 文件
-    return FileResponse(
-        path=zip_path,
-        filename=f"{pdf_name}.zip",
-        media_type="application/zip"
-    )
-
-@router.get("/download-file")
-async def download_file(
-    filename: str = Query(..., description="任务目录名"),
-    file: str     = Query(..., description="原始文件名，例如 0519(1).mp4 或 encoded_0519(1).mp4")
-):
-    # 如果前端传的是原始名，就加前缀；如果已经带了，就直接用
-    if file.startswith("encoded_"):
-        encoded_name = file
-        download_as   = file[len("encoded_"):]  # 去掉前缀后做下载名
-    else:
-        encoded_name = f"encoded_{file}"
-        download_as   = file
-
-    file_path = ENCODED_VIDEO_DIR / filename / encoded_name
-    if not file_path.exists() or not file_path.is_file():
-        raise HTTPException(404, detail=f"{encoded_name} 不存在")
-
-    return FileResponse(
-        path=file_path,
-        media_type="application/octet-stream",
-        filename=download_as    # 浏览器保存成没有前缀的原始文件名
-    )
+        raise HTTPException(status_code=404, detail="任务目录不存在")
+    try:
+        # 创建临时 zip 文件
+        tmp_dir = tempfile.mkdtemp()
+        zip_path = Path(tmp_dir) / f"{pdf_name}.zip"
+        shutil.make_archive(str(zip_path.with_suffix("")), 'zip', root_dir=task_dir)
+        # 下载完自动清理
+        background_tasks.add_task(shutil.rmtree, tmp_dir)
+        return FileResponse(
+            path=zip_path,
+            filename=f"{pdf_name}.zip",
+            media_type="application/zip"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"打包失败: {e}")
