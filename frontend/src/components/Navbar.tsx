@@ -14,6 +14,11 @@ const Navbar: React.FC = () => {
         key: '/tts',
         label: <Link to="/tts">文本转音频</Link>,  
       }
+      ,
+    {
+        key: '/pdf',
+        label: <Link to="/pdf">PDFから写真生成</Link>,  
+      }
   ]
 
   return (
