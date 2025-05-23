@@ -123,8 +123,8 @@ def process_directory(input_directory, output_directory):
 
 if __name__ == "__main__":
     # Get current directory
-    current_directory = "./raw_videos/"
-    output_directory = "./outputs"
+    current_directory = "./videos/"
+    output_directory = "./encoded_videos/"
 
     # Start processing
     process_directory(current_directory, output_directory)
