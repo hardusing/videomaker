@@ -1,92 +1,53 @@
-# VideoMaker 项目
+# 视频制作系统详细设计白皮书
 
-这是一个基于PPT自动生成视频的项目，可以将PPT转换为带有语音和字幕的视频。
+## 项目概述
+本项目是一个视频制作系统，旨在通过自动化工具将 PDF、PPT 等文档转换为视频，并支持语音合成、字幕生成等功能。系统分为前端和后端两部分，前端负责用户交互，后端负责核心业务逻辑和数据处理。
 
-## 项目架构
+## 技术栈
+### 前端
+- **React**: 用于构建用户界面，提供组件化开发。
+- **TypeScript**: 提供类型安全，增强代码可维护性。
+- **WebSocket**: 实现实时进度推送，确保用户能够实时获取任务状态。
 
-项目采用前后端分离的架构：
+### 后端
+- **FastAPI**: 高性能的 Python Web 框架，支持异步编程，提供自动生成的 API 文档。
+- **Pydantic**: 用于数据验证和序列化，确保 API 接口的数据安全性和一致性。
+- **Redis**: 用于任务管理和缓存，提高系统响应速度。
+- **MySQL**: 用于数据持久化，存储用户配置和任务信息。
+- **Tesseract-OCR**: 用于 OCR 功能，支持从图像中提取文本。
+- **PyMuPDF**: 用于 PDF 处理，支持 PDF 转图片等功能。
+- **TTS 引擎**: 用于语音合成，将文本转换为语音。
 
-### 后端 (Python FastAPI)
-- 主要功能：
-  - PPT文件上传和处理
-  - 笔记提取
-  - 文本转语音(TTS)
-  - 字幕生成
-- 目录结构：
-  - `/backend/app`: 主要应用代码
-  - `/backend/uploads`: 上传的PPT文件存储
-  - `/backend/notes_output`: 提取的笔记输出
-  - `/backend/srt_and_mav`: 生成的音频和字幕文件
+## 主要功能
+1. **PDF 上传与转换**: 支持 PDF 文件上传，并将其转换为图片，便于后续处理。
+2. **语音合成**: 将文本转换为语音，支持多种语音选项。
+3. **字幕生成**: 自动生成字幕文件，支持与音频同步。
+4. **任务管理**: 通过 Redis 实现任务状态管理，支持实时进度推送。
+5. **API 文档**: 使用 FastAPI 自动生成 API 文档，便于开发者使用。
 
-### 前端 (React + TypeScript)
-- 技术栈：
-  - React 18
-  - TypeScript
-  - Ant Design
-  - Redux Toolkit
-  - React Router
-  - Vite
+## 技术及作用
+- **FastAPI**: 提供高性能的 API 服务，支持异步编程，适合处理高并发请求。
+- **Pydantic**: 通过类型注解定义数据结构，自动校验输入数据，确保数据安全。
+- **Redis**: 用于缓存和任务队列管理，提高系统响应速度。
+- **MySQL**: 用于数据持久化，存储用户配置和任务信息，确保数据安全。
+- **WebSocket**: 实现实时通信，确保用户能够实时获取任务状态。
+- **Tesseract-OCR**: 支持从图像中提取文本，便于后续处理。
+- **PyMuPDF**: 提供 PDF 处理功能，支持 PDF 转图片，便于后续处理。
+- **TTS 引擎**: 将文本转换为语音，支持多种语音选项，提升用户体验。
 
-## API 接口
-
-### 项目相关
-- `GET /api/v1/projects`: 获取所有项目列表
-- `POST /api/v1/projects/upload`: 上传PPT文件
-- `POST /api/v1/projects/{project_id}/extract`: 提取项目笔记
-
-### TTS相关
-- `GET /api/tts/texts`: 获取所有文本文件列表
-- `POST /api/tts/generate`: 生成所有音频文件
-
-## 如何启动
-
-### 后端启动
-1. 进入后端目录：
-```bash
-cd backend
+## 项目结构
+```
+project/
+├── frontend/          # 前端代码
+├── backend/           # 后端代码
+│   ├── app/           # 应用代码
+│   ├── uploads/       # 上传文件目录
+│   ├── notes_output/  # 笔记输出目录
+│   ├── srt_and_wav/   # 字幕和音频文件目录
+│   ├── main.py        # 主程序入口
+│   └── requirements.txt # 依赖列表
+└── README.md          # 项目说明
 ```
 
-2. 创建并激活虚拟环境：
-```bash
-python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# 或
-.venv\Scripts\activate  # Windows
-```
-
-3. 安装依赖：
-```bash
-pip install -r requirements.txt
-```
-
-4. 启动服务器：
-```bash
-uvicorn app.main:app --reload
-```
-
-### 前端启动
-1. 进入前端目录：
-```bash
-cd frontend
-```
-
-2. 安装依赖：
-```bash
-npm install
-```
-
-3. 启动开发服务器：
-```bash
-npm run dev
-```
-
-## 使用说明
-1. 通过前端界面上传PPT文件
-2. 系统会自动提取PPT中的笔记
-3. 使用TTS功能将文本转换为语音
-4. 生成的字幕和音频文件可以在前端界面查看和下载
-
-## 注意事项
-- 仅支持.pptx格式的PPT文件
-- 确保系统有足够的存储空间用于文件处理
-- 音频生成可能需要一定时间，请耐心等待
+## 结论
+本项目通过整合多种技术，实现了一个功能强大的视频制作系统，能够满足用户对文档转视频的需求。通过使用 FastAPI、Pydantic、Redis 等技术，系统具有高性能、高可扩展性和高安全性，能够满足不同用户的需求。

@@ -559,3 +559,94 @@ async def generate_pages_script(
         "txt_file": str(output_file) if output_file else None
     }
 
+@router.post("/split-script")
+async def split_script(
+    task_id: str = Query(None, description="任务ID，可选"),
+    dir_name: str = Query(None, description="目录名，可选")
+):
+    """
+    读取指定目录下的txt文件，根据Page标记拆分成多个txt文件
+    """
+    from app.utils.task_manager import task_manager
+    subdir = None
+    if task_id:
+        task = task_manager.get_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="任务不存在")
+        if task["type"] == "pdf_upload":
+            subdir = task["data"].get("original_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "pdf_to_images":
+            subdir = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "ppt_upload":
+            subdir = task["data"].get("original_filename", "").rsplit(".", 1)[0]
+    elif dir_name:
+        subdir = dir_name
+    else:
+        raise HTTPException(status_code=400, detail="必须提供task_id或dir_name")
+
+    # 构建目录路径
+    target_dir = NOTES_DIR / subdir
+    print(f"[LOG] 目标目录: {target_dir}")
+    
+    if not target_dir.exists() or not target_dir.is_dir():
+        raise HTTPException(status_code=404, detail=f"目录不存在: {target_dir}")
+
+    try:
+        # 获取目录下的所有txt文件
+        txt_files = list(target_dir.glob("*.txt"))
+        print(f"[LOG] 目录下找到 {len(txt_files)} 个txt文件")
+        
+        if not txt_files:
+            raise HTTPException(status_code=404, detail="目录下没有txt文件")
+            
+        # 使用第一个txt文件
+        source_file = txt_files[0]
+        print(f"[LOG] 将处理文件: {source_file}")
+        
+        # 读取源文件内容
+        content = source_file.read_text(encoding="utf-8")
+        print(f"[LOG] 成功读取文件，内容长度: {len(content)}")
+        
+        # 按Page标记分割内容
+        pages = []
+        current_page = []
+        for line in content.splitlines():
+            if line.strip().startswith("Page "):
+                if current_page:
+                    pages.append("\n".join(current_page))
+                current_page = []
+            else:
+                current_page.append(line)
+        if current_page:
+            pages.append("\n".join(current_page))
+            
+        print(f"[LOG] 分割得到 {len(pages)} 个页面")
+        
+        if len(pages) <= 1:
+            raise HTTPException(status_code=400, detail="文件内容不足以拆分")
+        
+        # 为每个页面创建单独的文件
+        new_files = []
+        for i, page_content in enumerate(pages, 1):
+            # 创建新文件
+            page_file = source_file.parent / f"{i}.txt"
+            # 写入内容（不包含Page标记）
+            page_file.write_text(page_content.strip(), encoding="utf-8")
+            new_files.append(str(page_file.relative_to(NOTES_DIR)))
+            print(f"[LOG] 页面 {i} 已保存到: {page_file}")
+        
+        # 获取目录下的所有txt文件
+        all_txt_files = [str(f.relative_to(NOTES_DIR)) for f in target_dir.glob("*.txt")]
+        print(f"[LOG] 目录下共有 {len(all_txt_files)} 个txt文件")
+        
+        return {
+            "message": "文件拆分成功",
+            "source_file": str(source_file.relative_to(NOTES_DIR)),
+            "new_files": new_files,
+            "all_files": all_txt_files
+        }
+        
+    except Exception as e:
+        print(f"[ERROR] 文件拆分失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"文件拆分失败: {str(e)}")
+

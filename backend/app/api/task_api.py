@@ -107,6 +107,109 @@ def delete_task_and_files(task_id: str):
     r.delete(f"task:{task_id}")
     return {"message": f"任务 {task_id} 及相关文件已删除"}
 
+@router.get("/files/all")
+async def get_all_tasks_files() -> Dict[str, Dict[str, Any]]:
+    """
+    获取所有任务的文件信息
+    返回格式: {
+        "task_id1": {
+            "pdf_file": "文件名.pdf",
+            "ppt_file": "文件名.pptx",
+            "image_files": [...],
+            "audio_files": [...],
+            "video_files": [...],
+            "notes_file": "文件名.txt"
+        },
+        "task_id2": {...}
+    }
+    """
+    all_tasks = task_manager.list_tasks()
+    result = {}
+    
+    for task_id, task in all_tasks.items():
+        data = task.get("data", {})
+        files_info = {
+            "pdf_file": None,
+            "ppt_file": None,
+            "image_files": [],
+            "audio_files": [],
+            "video_files": [],
+            "notes_file": None
+        }
+        
+        # 获取PDF文件名
+        if task["type"] in ["pdf_upload", "pdf_to_images"]:
+            files_info["pdf_file"] = data.get("original_filename") or data.get("pdf_filename")
+        
+        # 获取PPT文件名
+        if task["type"] == "ppt_upload":
+            files_info["ppt_file"] = data.get("original_filename")
+        
+        # 获取图片文件列表
+        if "converted_images" in data:
+            files_info["image_files"] = data["converted_images"]
+        
+        # 获取音频文件列表
+        if "audio_files" in data:
+            files_info["audio_files"] = data["audio_files"]
+        
+        # 获取视频文件列表
+        if "videos" in data:
+            files_info["video_files"] = data["videos"]
+        
+        # 获取文稿文件
+        if "notes_file" in data:
+            files_info["notes_file"] = data["notes_file"]
+        
+        result[task_id] = files_info
+    
+    return result
+
+@router.get("/{task_id}/files")
+async def get_task_files(task_id: str) -> Dict[str, Any]:
+    """
+    获取任务相关的所有文件名信息
+    """
+    task = task_manager.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    
+    data = task.get("data", {})
+    files_info = {
+        "pdf_file": None,
+        "ppt_file": None,
+        "image_files": [],
+        "audio_files": [],
+        "video_files": [],
+        "notes_file": None
+    }
+    
+    # 获取PDF文件名
+    if task["type"] in ["pdf_upload", "pdf_to_images"]:
+        files_info["pdf_file"] = data.get("original_filename") or data.get("pdf_filename")
+    
+    # 获取PPT文件名
+    if task["type"] == "ppt_upload":
+        files_info["ppt_file"] = data.get("original_filename")
+    
+    # 获取图片文件列表
+    if "converted_images" in data:
+        files_info["image_files"] = data["converted_images"]
+    
+    # 获取音频文件列表
+    if "audio_files" in data:
+        files_info["audio_files"] = data["audio_files"]
+    
+    # 获取视频文件列表
+    if "videos" in data:
+        files_info["video_files"] = data["videos"]
+    
+    # 获取文稿文件
+    if "notes_file" in data:
+        files_info["notes_file"] = data["notes_file"]
+    
+    return files_info
+
 # ================== 各阶段API中写入进度的举例 ==================
 
 # 1. PDF转图片结束时：
