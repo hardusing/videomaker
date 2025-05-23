@@ -141,6 +141,13 @@ async def convert_pdf_to_images(task_id: str):
             doc = fitz.open(pdf_path)
             stem = pdf_path.stem
             output_subdir = IMG_DIR / stem
+            # === 新增：生成前清空旧图片 ===
+            if output_subdir.exists():
+                for f in output_subdir.glob("*"):
+                    try:
+                        f.unlink()
+                    except Exception:
+                        pass
             output_subdir.mkdir(parents=True, exist_ok=True)
             saved_files = []
             total_pages = len(doc)
