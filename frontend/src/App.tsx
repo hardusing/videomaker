@@ -4,6 +4,7 @@ import { Layout } from 'antd'
 import Navbar from './components/Navbar'
 import ProjectList from './pages/ProjectList'
 import TTSPage from './pages/TTSPage'
+import VideoManager from "./pages/VideoManager"; 
 
 const { Header, Content } = Layout
 
@@ -17,6 +18,7 @@ function App() {
         <Routes>
           <Route path="/" element={<ProjectList />} />
           <Route path="/tts" element={<TTSPage />} />
+          <Route path="/videos" element={<VideoManager />} />
           {/* 添加更多路由 */}
         </Routes>
       </Content>
