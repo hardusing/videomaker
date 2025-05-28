@@ -193,8 +193,11 @@ const UploadPage: React.FC = () => {
       const response = await fetch(url);
       const blob = await response.blob();
       const link = document.createElement("a");
-      // 用页码+原名，保证顺序
-      link.download = page ? `${page}_${name}` : name;
+      // 使用PDF名字+页码命名
+      const pdfNameWithoutExt = selectedPdf?.replace(/\.pdf$/i, "") || "";
+      const newFileName = `${pdfNameWithoutExt}_${page}.png`;
+
+      link.download = newFileName;
       link.href = window.URL.createObjectURL(blob);
       link.click();
       window.URL.revokeObjectURL(link.href);
