@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException, Body, Query, Form, Path, UploadFile, File
+from fastapi import APIRouter, HTTPException, Body, Query, Form, UploadFile, File
+from fastapi import Path as FastAPIPath
+from fastapi.responses import PlainTextResponse
 from pathlib import Path
 import openai
 import os
@@ -13,6 +15,7 @@ import time
 from app.utils.mysql_config_helper import get_config_value
 from openai import OpenAI
 import requests
+import re
 
 
 load_dotenv()
@@ -69,6 +72,7 @@ async def list_all_txt_files(
 
 @router.get("/{filename}")
 async def get_txt_file_content(
+    filename: str = FastAPIPath(..., description="要读取的文稿文件名"),
     task_id: str = Query(None, description="任务ID，可选"),
     dir_name: str = Query(None, description="目录名，可选")
 ):
@@ -97,7 +101,7 @@ async def get_txt_file_content(
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="文件不存在")
     content = file_path.read_text(encoding="utf-8")
-    return {"filename": str(file_path.relative_to(NOTES_DIR)), "content": content}
+    return PlainTextResponse(content)
 
 @router.post("/rewrite")
 async def rewrite_txt_file(
@@ -385,7 +389,8 @@ async def generate_pages_script(
     filename: str = Query(None, description="目录名/文件名，可选"),
     files: List[UploadFile] = File(None, description="多个文件，可选"),
     api_key: str = Form(..., description="API Key，可自定义"),
-    prompt: str = Form(None, description="自定义prompt，可选")
+    prompt: str = Form(None, description="自定义prompt，可选"),
+    pages: List[int] = Form(None, description="选中的页码，可选")
 ):
     print(f"[LOG] 接收到请求: task_id={task_id}, filename={filename}, files数量={len(files) if files else 0}")
     if not task_id and not filename and not files:
@@ -421,6 +426,12 @@ async def generate_pages_script(
         for ext in ["*.jpg", "*.jpeg", "*.png"]:
             slides_imgs.extend(target_dir.glob(ext))
         print(f"[LOG] 待处理图片数量: {len(slides_imgs)}")
+        if pages:
+            def extract_page_num(p):
+                match = re.search(r"(\d+)", p.stem)
+                return int(match.group(1)) if match else None
+            slides_imgs = [img for img in slides_imgs if extract_page_num(img) in pages]
+            print(f"[LOG] 过滤后图片数量: {len(slides_imgs)}，选中页码: {pages}")
         base_prompt = prompt or read_file_as_text("课程讲稿生成prompt")
         url = "https://www.dmxapi.com/v1/chat/completions"
         output_dir = Path("./notes_output") / subdir
@@ -471,7 +482,7 @@ async def generate_pages_script(
             if len(recent_scripts) > 6:
                 recent_scripts.pop(0)
             # 自动保存每页为单独txt
-            page_txt = output_dir / f"{i}.txt"
+            page_txt = output_dir / f"{slide.stem}.txt"
             with open(page_txt, "w", encoding="utf-8") as f:
                 f.write(script)
             print(f"[LOG] 单页脚本已保存到: {page_txt}")
@@ -543,7 +554,7 @@ async def generate_pages_script(
                 if len(recent_scripts) > 6:
                     recent_scripts.pop(0)
                 # 自动保存每页为单独txt
-                page_txt = output_dir / f"{i}.txt"
+                page_txt = output_dir / f"{slide.stem}.txt"
                 with open(page_txt, "w", encoding="utf-8") as f:
                     f.write(script)
                 print(f"[LOG] 单页脚本已保存到: {page_txt}")
