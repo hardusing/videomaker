@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException, Body, Query, Form, Path, UploadFile, File
+from fastapi import APIRouter, HTTPException, Body, Query, Form, UploadFile, File
+from fastapi import Path as FastAPIPath
+from fastapi.responses import PlainTextResponse
 from pathlib import Path
 import openai
 import os
@@ -13,6 +15,7 @@ import time
 from app.utils.mysql_config_helper import get_config_value
 from openai import OpenAI
 import requests
+import re
 
 
 load_dotenv()
@@ -69,6 +72,7 @@ async def list_all_txt_files(
 
 @router.get("/{filename}")
 async def get_txt_file_content(
+    filename: str = FastAPIPath(..., description="要读取的文稿文件名"),
     task_id: str = Query(None, description="任务ID，可选"),
     dir_name: str = Query(None, description="目录名，可选")
 ):
@@ -97,7 +101,7 @@ async def get_txt_file_content(
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="文件不存在")
     content = file_path.read_text(encoding="utf-8")
-    return {"filename": str(file_path.relative_to(NOTES_DIR)), "content": content}
+    return PlainTextResponse(content)
 
 @router.post("/rewrite")
 async def rewrite_txt_file(
@@ -385,7 +389,8 @@ async def generate_pages_script(
     filename: str = Query(None, description="目录名/文件名，可选"),
     files: List[UploadFile] = File(None, description="多个文件，可选"),
     api_key: str = Form(..., description="API Key，可自定义"),
-    prompt: str = Form(None, description="自定义prompt，可选")
+    prompt: str = Form(None, description="自定义prompt，可选"),
+    pages: List[int] = Form(None, description="选中的页码，可选")
 ):
     print(f"[LOG] 接收到请求: task_id={task_id}, filename={filename}, files数量={len(files) if files else 0}")
     if not task_id and not filename and not files:
@@ -421,6 +426,12 @@ async def generate_pages_script(
         for ext in ["*.jpg", "*.jpeg", "*.png"]:
             slides_imgs.extend(target_dir.glob(ext))
         print(f"[LOG] 待处理图片数量: {len(slides_imgs)}")
+        if pages:
+            def extract_page_num(p):
+                match = re.search(r"(\d+)", p.stem)
+                return int(match.group(1)) if match else None
+            slides_imgs = [img for img in slides_imgs if extract_page_num(img) in pages]
+            print(f"[LOG] 过滤后图片数量: {len(slides_imgs)}，选中页码: {pages}")
         base_prompt = prompt or read_file_as_text("课程讲稿生成prompt")
         url = "https://www.dmxapi.com/v1/chat/completions"
         output_dir = Path("./notes_output") / subdir
@@ -471,7 +482,7 @@ async def generate_pages_script(
             if len(recent_scripts) > 6:
                 recent_scripts.pop(0)
             # 自动保存每页为单独txt
-            page_txt = output_dir / f"{i}.txt"
+            page_txt = output_dir / f"{slide.stem}.txt"
             with open(page_txt, "w", encoding="utf-8") as f:
                 f.write(script)
             print(f"[LOG] 单页脚本已保存到: {page_txt}")
@@ -543,7 +554,7 @@ async def generate_pages_script(
                 if len(recent_scripts) > 6:
                     recent_scripts.pop(0)
                 # 自动保存每页为单独txt
-                page_txt = output_dir / f"{i}.txt"
+                page_txt = output_dir / f"{slide.stem}.txt"
                 with open(page_txt, "w", encoding="utf-8") as f:
                     f.write(script)
                 print(f"[LOG] 单页脚本已保存到: {page_txt}")
@@ -558,4 +569,95 @@ async def generate_pages_script(
         "scripts": scripts,
         "txt_file": str(output_file) if output_file else None
     }
+
+@router.post("/split-script")
+async def split_script(
+    task_id: str = Query(None, description="任务ID，可选"),
+    dir_name: str = Query(None, description="目录名，可选")
+):
+    """
+    读取指定目录下的txt文件，根据Page标记拆分成多个txt文件
+    """
+    from app.utils.task_manager import task_manager
+    subdir = None
+    if task_id:
+        task = task_manager.get_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="任务不存在")
+        if task["type"] == "pdf_upload":
+            subdir = task["data"].get("original_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "pdf_to_images":
+            subdir = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "ppt_upload":
+            subdir = task["data"].get("original_filename", "").rsplit(".", 1)[0]
+    elif dir_name:
+        subdir = dir_name
+    else:
+        raise HTTPException(status_code=400, detail="必须提供task_id或dir_name")
+
+    # 构建目录路径
+    target_dir = NOTES_DIR / subdir
+    print(f"[LOG] 目标目录: {target_dir}")
+    
+    if not target_dir.exists() or not target_dir.is_dir():
+        raise HTTPException(status_code=404, detail=f"目录不存在: {target_dir}")
+
+    try:
+        # 获取目录下的所有txt文件
+        txt_files = list(target_dir.glob("*.txt"))
+        print(f"[LOG] 目录下找到 {len(txt_files)} 个txt文件")
+        
+        if not txt_files:
+            raise HTTPException(status_code=404, detail="目录下没有txt文件")
+            
+        # 使用第一个txt文件
+        source_file = txt_files[0]
+        print(f"[LOG] 将处理文件: {source_file}")
+        
+        # 读取源文件内容
+        content = source_file.read_text(encoding="utf-8")
+        print(f"[LOG] 成功读取文件，内容长度: {len(content)}")
+        
+        # 按Page标记分割内容
+        pages = []
+        current_page = []
+        for line in content.splitlines():
+            if line.strip().startswith("Page "):
+                if current_page:
+                    pages.append("\n".join(current_page))
+                current_page = []
+            else:
+                current_page.append(line)
+        if current_page:
+            pages.append("\n".join(current_page))
+            
+        print(f"[LOG] 分割得到 {len(pages)} 个页面")
+        
+        if len(pages) <= 1:
+            raise HTTPException(status_code=400, detail="文件内容不足以拆分")
+        
+        # 为每个页面创建单独的文件
+        new_files = []
+        for i, page_content in enumerate(pages, 1):
+            # 创建新文件
+            page_file = source_file.parent / f"{i}.txt"
+            # 写入内容（不包含Page标记）
+            page_file.write_text(page_content.strip(), encoding="utf-8")
+            new_files.append(str(page_file.relative_to(NOTES_DIR)))
+            print(f"[LOG] 页面 {i} 已保存到: {page_file}")
+        
+        # 获取目录下的所有txt文件
+        all_txt_files = [str(f.relative_to(NOTES_DIR)) for f in target_dir.glob("*.txt")]
+        print(f"[LOG] 目录下共有 {len(all_txt_files)} 个txt文件")
+        
+        return {
+            "message": "文件拆分成功",
+            "source_file": str(source_file.relative_to(NOTES_DIR)),
+            "new_files": new_files,
+            "all_files": all_txt_files
+        }
+        
+    except Exception as e:
+        print(f"[ERROR] 文件拆分失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"文件拆分失败: {str(e)}")
 

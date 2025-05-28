@@ -29,22 +29,15 @@ const TTSPage: React.FC = () => {
   const fetchTaskList = async () => {
     try {
       const res = await axios.get('http://localhost:8000/api/tasks/');
-      const ids = Object.keys(res.data);
-      const taskInfos = await Promise.allSettled(
-        ids.map(id => axios.get(`http://localhost:8000/api/tasks/${id}`))
-      );
-      const tasks = taskInfos
-        .filter(result => result.status === 'fulfilled')
-        .map(result => {
-          const task = (result as PromiseFulfilledResult<any>).value.data;
-          const name =
-            task.data?.original_filename?.split('.')[0] ||
-            task.data?.pdf_filename?.split('.')[0] ||
-            task.id;
-          return { id: task.id, name };
-        });
-      setTaskList(tasks);
-    } catch {
+      const tasksRaw = res.data;
+      const taskMap = new Map<string, { id: string; name: string }>();
+      Object.entries(tasksRaw).forEach(([id, task]: [string, any]) => {
+        const name = task.data?.original_filename?.split('.')[0] || task.data?.pdf_filename?.split('.')[0] || id;
+        taskMap.set(id, { id, name });
+      });
+      setTaskList(Array.from(taskMap.values()));
+    } catch (error) {
+      console.error(error);
       message.error('获取任务列表失败');
     }
   };
@@ -68,7 +61,7 @@ const TTSPage: React.FC = () => {
       const task = res.data;
       const folder = task.data?.original_filename?.split('.')[0] || task.data?.pdf_filename?.split('.')[0];
       setFolderName(folder);
-      const filesRes = await axios.get('http://localhost:8000/api/files/list/', {
+      const filesRes = await axios.get('http://localhost:8000/api/files/list', {
         params: { task_id: selectedTaskId }
       });
       const files: string[] = filesRes.data || [];
@@ -96,7 +89,6 @@ const TTSPage: React.FC = () => {
       const formData = new FormData();
       formData.append("api_key", noteApiKey);
       formData.append("prompt", notePrompt || "");
-
       if (selectedOnly && selectedImages.length > 0) {
         selectedImages.forEach(img => {
           const match = img.match(/(\d+)\.png$/);
@@ -105,22 +97,11 @@ const TTSPage: React.FC = () => {
           }
         });
       }
-
       const query = new URLSearchParams();
-      if (selectedTaskId) {
-        query.append("task_id", selectedTaskId);
-      }
-
-      await axios.post(
-        `http://localhost:8000/api/notes/generate-pages-script?${query.toString()}`,
-        formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data"
-          }
-        }
-      );
-
+      if (selectedTaskId) query.append("task_id", selectedTaskId);
+      await axios.post(`http://localhost:8000/api/notes/generate-pages-script?${query.toString()}`, formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
       message.success("文稿生成成功");
       fetchTxtFiles();
     } catch (err) {
@@ -129,40 +110,60 @@ const TTSPage: React.FC = () => {
     }
   };
 
-
-  const handleGenerateAll = async () => {
+  const handleGenerateSelected = async () => {
     if (!selectedTaskId) return;
+    const filesToGenerate = selectedFiles.length > 0 ? selectedFiles : txtFiles;
+    if (filesToGenerate.length === 0) {
+      message.warning("没有选中的文稿文件");
+      return;
+    }
     setGenerating(true);
     setProgress(0);
-    wsRef.current = new WebSocket(`ws://localhost:8000/api/tts/ws/generate`);
+
+    wsRef.current = new WebSocket(`ws://localhost:8000/api/tts/ws/generate-selected/${selectedTaskId}`);
+    wsRef.current.onopen = () => {
+      wsRef.current?.send(JSON.stringify({ filenames: filesToGenerate }));
+    };
     wsRef.current.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data);
-        if (data.type === 'filename' && data.progress) {
-          setProgress(data.progress.progress);
-        }
-      } catch {}
+        if (data.progress) setProgress(data.progress);
+        else if (data.error) message.error(data.error);
+      } catch {
+        console.error("WebSocket解析失败", e.data);
+      }
     };
+
     try {
-      await axios.post(`http://localhost:8000/api/tts/generate`, null, {
-        params: { task_id: selectedTaskId }
+      await axios.post(`http://localhost:8000/api/tts/generate-selected?task_id=${selectedTaskId}`, {
+        filenames: filesToGenerate
       });
-      message.success('生成完成');
+      message.success('选中文稿生成完成');
       fetchGeneratedFiles();
+    } catch (err) {
+      console.error(err);
+      message.error('生成失败');
     } finally {
       setGenerating(false);
       wsRef.current?.close();
     }
   };
 
+  const handleDownloadSelectedMediaZip = async () => {
+    const mediaFiles = selectedFiles.filter(name => name.endsWith('.wav') || name.endsWith('.srt'));
+    if (mediaFiles.length === 0) return;
+    const link = document.createElement('a');
+    link.href = `http://localhost:8000/api/download/all?task_id=${selectedTaskId}`;
+    link.download = `${folderName}_srt_and_wav.zip`;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleCheckBreak = async () => {
     const res = await axios.get('http://localhost:8000/api/tts/check-breaktime/all');
     setBreakResults(res.data.results);
-  };
-
-  const handleGenerateOne = async (filename: string) => {
-    await axios.post('http://localhost:8000/api/tts/generate-one', { filename });
-    fetchGeneratedFiles();
   };
 
   const deleteSingleFile = async (filename: string) => {
@@ -191,6 +192,18 @@ const TTSPage: React.FC = () => {
     });
   };
 
+  const handleSelectAllTxtFiles = () => {
+    setSelectedFiles(txtFiles);
+  };
+
+  const handleSelectAllMediaFiles = () => {
+    setSelectedFiles([...audioFiles, ...subtitleFiles]);
+  };
+
+  const handleClearSelected = () => {
+    setSelectedFiles([]);
+  };
+
   useEffect(() => {
     fetchTaskList();
     (async () => {
@@ -203,6 +216,7 @@ const TTSPage: React.FC = () => {
     fetchTxtFiles();
     fetchGeneratedFiles();
     fetchImages();
+    setSelectedFiles([]);
   }, [selectedTaskId]);
 
   const getConfig = async (key: string) => {
@@ -214,6 +228,8 @@ const TTSPage: React.FC = () => {
     await axios.post('http://localhost:8000/api/tts/set-config', { key, value });
     message.success(`${key} 设置成功`);
   };
+
+  const hasDownloadableMedia = selectedFiles.some(name => name.endsWith('.wav') || name.endsWith('.srt'));
 
   return (
     <div style={{ padding: 24 }}>
@@ -250,22 +266,12 @@ const TTSPage: React.FC = () => {
       </Card>
 
       <Card title="图片生成文稿" style={{ marginTop: 24 }}>
-        <Input
-          value={noteApiKey}
-          onChange={(e) => setNoteApiKey(e.target.value)}
-          placeholder="请输入 API Key"
-          style={{ marginBottom: 8 }}
-        />
-        <Input.TextArea
-          value={notePrompt}
-          onChange={(e) => setNotePrompt(e.target.value)}
-          placeholder="请输入 Prompt"
-          rows={2}
-          style={{ marginBottom: 8 }}
-        />
+        <Input value={noteApiKey} onChange={(e) => setNoteApiKey(e.target.value)} placeholder="请输入 API Key" style={{ marginBottom: 8 }} />
+        <Input.TextArea value={notePrompt} onChange={(e) => setNotePrompt(e.target.value)} placeholder="请输入 Prompt" rows={2} style={{ marginBottom: 8 }} />
         <Space>
-          <Button onClick={() => handleGenerateNotes(false)}>生成全部</Button>
-          <Button onClick={() => handleGenerateNotes(true)}>生成选中</Button>
+          <Button type="primary" onClick={() => handleGenerateNotes(true)} disabled={selectedImages.length === 0}>
+            生成选中
+          </Button>
         </Space>
         <Table
           rowSelection={{
@@ -276,11 +282,7 @@ const TTSPage: React.FC = () => {
           columns={[{
             title: '预览图',
             render: (row) => (
-              <img
-                src={`http://localhost:8000/processed_images/${encodeURIComponent(row.image)}`}
-                style={{ height: 100 }}
-                onError={(e) => (e.currentTarget.style.display = 'none')}
-              />
+              <img src={`http://localhost:8000/processed_images/${encodeURIComponent(row.image)}`} style={{ height: 100 }} onError={(e) => (e.currentTarget.style.display = 'none')} />
             )
           }]}
           pagination={false}
@@ -289,26 +291,42 @@ const TTSPage: React.FC = () => {
       </Card>
 
       <Space style={{ margin: '16px 0' }}>
-        <Button onClick={handleGenerateAll}>生成所有音频与字幕</Button>
+        <Button onClick={handleSelectAllTxtFiles}>全选所有文稿</Button>
+        <Button onClick={handleSelectAllMediaFiles}>全选所有音频和字幕</Button>
+        <Button onClick={handleClearSelected}>取消全选</Button>
+        <Button onClick={handleGenerateSelected}>生成选中文稿</Button>
+        <Button onClick={handleDownloadSelectedMediaZip} disabled={!hasDownloadableMedia}>
+          下载选中音频与字幕 (ZIP)
+        </Button>
         <Button onClick={handleCheckBreak}>检查 break 标签</Button>
         <Button danger onClick={deleteAllFiles}>删除所有</Button>
       </Space>
+
       {generating && <Progress percent={progress} status="active" style={{ marginTop: 10 }} />}
 
       <h3>文稿文件</h3>
       <Table
         rowSelection={{
           selectedRowKeys: selectedFiles,
-          onChange: keys => setSelectedFiles(keys as string[])
+          onChange: keys => setSelectedFiles(keys as string[]),
+          hideSelectAll: true
         }}
         dataSource={txtFiles.map(f => ({ key: f, name: f }))}
         columns={[{
-          title: '文件名', dataIndex: 'name'
+          title: '文稿',
+          render: (row) => (
+            <a href={`http://localhost:8000/api/notes/${encodeURIComponent(row.name)}?dir_name=${encodeURIComponent(folderName)}`} target="_blank" rel="noopener noreferrer">{row.name}</a>
+          )
         }]}
       />
 
       <h3>音频文件</h3>
       <Table
+        rowSelection={{
+          selectedRowKeys: selectedFiles,
+          onChange: keys => setSelectedFiles(keys as string[]),
+          hideSelectAll: true
+        }}
         dataSource={audioFiles.map(f => ({ key: f, name: f }))}
         columns={[{
           title: '音频',
@@ -323,6 +341,11 @@ const TTSPage: React.FC = () => {
 
       <h3>字幕文件</h3>
       <Table
+        rowSelection={{
+          selectedRowKeys: selectedFiles,
+          onChange: keys => setSelectedFiles(keys as string[]),
+          hideSelectAll: true
+        }}
         dataSource={subtitleFiles.map(f => ({ key: f, name: f }))}
         columns={[{
           title: '字幕',
