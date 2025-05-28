@@ -363,3 +363,16 @@ async def download_file(
         media_type="application/octet-stream",
         filename=download_as    # 浏览器保存成没有前缀的原始文件名
     )
+
+@router.get("/all-folders")
+async def get_all_folders():
+    """
+    获取所有已转码视频的任务文件夹（即 encoded_videos 下所有子目录名）。
+    """
+    if not ENCODED_VIDEO_DIR.exists():
+        return {"folders": []}
+    folders = [
+        f.name for f in ENCODED_VIDEO_DIR.iterdir()
+        if f.is_dir()
+    ]
+    return {"folders": folders}
