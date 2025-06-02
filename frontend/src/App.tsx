@@ -6,6 +6,7 @@ import ProjectList from './pages/ProjectList'
 import TTSPage from './pages/TTSPage'
 import VideoManager from "./pages/VideoManager"; 
 import UploadPage from './pages/UploadPage'
+import ManualScreen from './pages/ManualScreen'
 
 const { Header, Content } = Layout
 
@@ -21,6 +22,7 @@ function App() {
           <Route path="/tts" element={<TTSPage />} />
           <Route path="/videos" element={<VideoManager />} />
           <Route path="/pdf" element={<UploadPage/>} />
+          <Route path="/manual" element={<ManualScreen/>} />
 
           {/* 添加更多路由 */}
         </Routes>

@@ -22,7 +22,12 @@ const Navbar: React.FC = () => {
     {
         key: '/pdf',
         label: <Link to="/pdf">PDFから写真生成</Link>,  
+      },
+       {
+        key: '/manual',
+        label: <Link to="/manual">マニュアル</Link>,  
       }
+
   ]
 
   return (
