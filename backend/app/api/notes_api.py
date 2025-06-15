@@ -383,16 +383,169 @@ async def generate_script(
         print(f"[FATAL] 文稿生成失败: {e}")
         raise HTTPException(status_code=500, detail=f"文稿生成失败: {str(e)}")
 
+@router.get("/available-folders")
+async def get_available_folders():
+    """
+    获取 processed_images 目录下所有可用的文件夹列表
+    """
+    try:
+        folders = []
+        if PROCESSED_IMAGES_DIR.exists():
+            for item in PROCESSED_IMAGES_DIR.iterdir():
+                if item.is_dir():
+                    # 检查文件夹中是否有图片文件
+                    has_images = any(
+                        item.glob(pattern) for pattern in ["*.jpg", "*.jpeg", "*.png"]
+                    )
+                    if has_images:
+                        folders.append({
+                            "name": item.name,
+                            "path": str(item.relative_to(PROCESSED_IMAGES_DIR))
+                        })
+        print(f"[LOG] 找到可用文件夹: {len(folders)} 个")
+        return {"folders": folders}
+    except Exception as e:
+        print(f"[ERROR] 获取文件夹列表失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取文件夹列表失败: {str(e)}")
+
+@router.post("/generate-folder-scripts")
+async def generate_folder_scripts(
+    folder_name: str = Form(..., description="processed_images下的文件夹名称"),
+    api_key: str = Form(..., description="API Key，必需"),
+    prompt: str = Form(default=None, description="自定义prompt，可选")
+):
+    """
+    为指定文件夹下的所有图片生成文稿
+    """
+    print(f"[LOG] 接收到文件夹脚本生成请求: folder_name={folder_name}")
+    print(f"[LOG] 接收到参数: api_key={api_key[:10] if api_key else None}..., prompt={prompt[:50] if prompt else None}...")
+    
+    # 构建目标目录路径
+    target_dir = PROCESSED_IMAGES_DIR / folder_name
+    print(f"[LOG] 目标图片目录: {target_dir}")
+    
+    if not target_dir.exists() or not target_dir.is_dir():
+        print("[ERROR] 目录不存在")
+        raise HTTPException(status_code=404, detail="指定的文件夹不存在")
+    
+    # 获取所有图片文件
+    slides_imgs = []
+    for ext in ["*.jpg", "*.jpeg", "*.png"]:
+        slides_imgs.extend(target_dir.glob(ext))
+    
+    # 按文件名排序，确保按页码顺序处理
+    slides_imgs.sort(key=lambda x: x.name)
+    
+    print(f"[LOG] 待处理图片数量: {len(slides_imgs)}")
+    
+    if not slides_imgs:
+        raise HTTPException(status_code=404, detail="文件夹中没有找到图片文件")
+    
+    # 准备输出目录
+    output_dir = Path("./notes_output") / folder_name
+    output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"[LOG] 输出目录: {output_dir}")
+    
+    # 获取提示词
+    base_prompt = prompt or read_file_as_text("课程讲稿生成prompt")
+    url = "https://www.dmxapi.com/v1/chat/completions"
+    
+    scripts = []
+    recent_scripts = []
+    
+    for i, slide in enumerate(slides_imgs, 1):
+        print(f"[LOG] 开始处理图片 {i}/{len(slides_imgs)}: {slide.name}")
+        time.sleep(5)  # 避免API频率限制
+        
+        # 编码图片
+        encoded_slide = encode_image(slide)
+        print(f"[LOG] 图片base64编码长度: {len(encoded_slide)}")
+        
+        # 构建上下文提示词
+        previous_scripts = "\n".join(
+            [f"Page {i-j}:\n{script}" for j, script in enumerate(reversed(recent_scripts), 1)]
+        )
+        full_prompt = (
+            f"{base_prompt}\n\n[Scripts of Previous pages]\n{previous_scripts}"
+            if recent_scripts else base_prompt
+        )
+        
+        # API请求
+        payload = {
+            "model": "claude-3-5-sonnet-20241022",
+            "messages": [
+                {"role": "system", "content": "You are an experienced lecturer for IT skill training, now you are in charge of writing scripts for various IT courses."},
+                {"role": "user", "content": [
+                    {"type": "text", "text": full_prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_slide}"}},
+                ]},
+            ],
+            "temperature": 0.4,
+            "user": "DMXAPI",
+        }
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+            "User-Agent": "DMXAPI/1.0.0 (https://www.dmxapi.com/)",
+        }
+        
+        try:
+            response = requests.post(url, headers=headers, json=payload)
+            print(f"[LOG] API响应状态: {response.status_code}")
+            
+            if response.status_code == 200:
+                result = response.json()
+                script = result["choices"][0]["message"]["content"]
+            else:
+                script = f"API调用失败: {response.status_code} {response.text}"
+                print(f"[ERROR] API调用失败: {response.text}")
+        except Exception as e:
+            print(f"[ERROR] API异常: {e}")
+            script = f"API异常: {e}"
+        
+        # 保存脚本
+        script_with_page = f"Page {i}:\n{script}"
+        scripts.append(script_with_page)
+        recent_scripts.append(script)
+        
+        # 保持最近6页的上下文
+        if len(recent_scripts) > 6:
+            recent_scripts.pop(0)
+        
+        # 保存单页文稿
+        page_txt = output_dir / f"{slide.stem}.txt"
+        with open(page_txt, "w", encoding="utf-8") as f:
+            f.write(script)
+        print(f"[LOG] 单页脚本已保存到: {page_txt}")
+    
+    # 保存合并文稿
+    combined_script_file = output_dir / f"{folder_name}_combined_scripts.txt"
+    with open(combined_script_file, "w", encoding="utf-8") as f:
+        f.write("\n\n".join(scripts))
+    print(f"[LOG] 合并脚本已保存到: {combined_script_file}")
+    
+    print(f"[LOG] 全部处理完成，成功生成文稿数: {len(scripts)}")
+    return {
+        "message": "文稿生成成功",
+        "folder_name": folder_name,
+        "processed_images": len(slides_imgs),
+        "output_directory": str(output_dir),
+        "combined_script_file": str(combined_script_file),
+        "scripts": scripts
+    }
+
 @router.post("/generate-pages-script")
 async def generate_pages_script(
     task_id: str = Query(None, description="任务ID，可选"),
     filename: str = Query(None, description="目录名/文件名，可选"),
-    files: List[UploadFile] = File(None, description="多个文件，可选"),
+    files: List[UploadFile] = File(default=None, description="多个文件，可选"),
     api_key: str = Form(..., description="API Key，可自定义"),
-    prompt: str = Form(None, description="自定义prompt，可选"),
-    pages: List[int] = Form(None, description="选中的页码，可选")
+    prompt: str = Form(default=None, description="自定义prompt，可选"),
+    pages: List[int] = Form(default=None, description="选中的页码，可选")
 ):
     print(f"[LOG] 接收到请求: task_id={task_id}, filename={filename}, files数量={len(files) if files else 0}")
+    print(f"[LOG] 接收到参数: api_key={api_key[:10] if api_key else None}..., prompt={prompt[:50] if prompt else None}..., pages={pages}")
     if not task_id and not filename and not files:
         print("[ERROR] 参数缺失，必须提供 task_id、filename 或 files")
         raise HTTPException(status_code=400, detail="必须提供 task_id、filename 或 files")

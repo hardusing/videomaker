@@ -24,6 +24,9 @@ const TTSPage: React.FC = () => {
   const [noteApiKey, setNoteApiKey] = useState('sk-xdtZS13EcaCHxoRbL50JDdP85EUKEhXtg4IcBKSKgF4ObTvW');
   const [notePrompt, setNotePrompt] = useState('');
   const [folderName, setFolderName] = useState('');
+  const [availableFolders, setAvailableFolders] = useState<{name: string, path: string}[]>([]);
+  const [selectedFolder, setSelectedFolder] = useState<string>('');
+  const [generatingFolder, setGeneratingFolder] = useState<boolean>(false);
   const wsRef = useRef<WebSocket | null>(null);
 
   const fetchTaskList = async () => {
@@ -84,21 +87,40 @@ const TTSPage: React.FC = () => {
     }
   };
 
+  const fetchAvailableFolders = async () => {
+    try {
+      const res = await axios.get('http://localhost:8000/api/notes/available-folders');
+      setAvailableFolders(res.data.folders || []);
+    } catch {
+      message.error('获取可用文件夹失败');
+    }
+  };
+
   const handleGenerateNotes = async (selectedOnly: boolean) => {
     try {
       const formData = new FormData();
       formData.append("api_key", noteApiKey);
       formData.append("prompt", notePrompt || "");
+      
+      // 收集选中的页码
       if (selectedOnly && selectedImages.length > 0) {
+        const pageNumbers: number[] = [];
         selectedImages.forEach(img => {
           const match = img.match(/(\d+)\.png$/);
           if (match) {
-            formData.append("pages", match[1]);
+            pageNumbers.push(parseInt(match[1], 10));
           }
         });
+        
+        // 将页码数组作为JSON字符串发送，或者逐个添加整数
+        pageNumbers.forEach(pageNum => {
+          formData.append("pages", pageNum.toString());
+        });
       }
+      
       const query = new URLSearchParams();
       if (selectedTaskId) query.append("task_id", selectedTaskId);
+      
       await axios.post(`http://localhost:8000/api/notes/generate-pages-script?${query.toString()}`, formData, {
         headers: { "Content-Type": "multipart/form-data" }
       });
@@ -107,6 +129,43 @@ const TTSPage: React.FC = () => {
     } catch (err) {
       console.error(err);
       message.error("文稿生成失败");
+    }
+  };
+
+  const handleGenerateFolderScripts = async () => {
+    if (!selectedFolder) {
+      message.warning("请选择一个文件夹");
+      return;
+    }
+    
+    if (!noteApiKey) {
+      message.warning("请输入API Key");
+      return;
+    }
+
+    setGeneratingFolder(true);
+    try {
+      const formData = new FormData();
+      formData.append("folder_name", selectedFolder);
+      formData.append("api_key", noteApiKey);
+      if (notePrompt) {
+        formData.append("prompt", notePrompt);
+      }
+      
+      const response = await axios.post('http://localhost:8000/api/notes/generate-folder-scripts', formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+      
+      message.success(`文稿生成成功！处理了 ${response.data.processed_images} 张图片`);
+      
+      // 刷新文件列表（如果当前选中的任务对应该文件夹）
+      fetchTxtFiles();
+    } catch (err: any) {
+      console.error(err);
+      const errorMsg = err.response?.data?.detail || "文稿生成失败";
+      message.error(errorMsg);
+    } finally {
+      setGeneratingFolder(false);
     }
   };
 
@@ -206,6 +265,7 @@ const TTSPage: React.FC = () => {
 
   useEffect(() => {
     fetchTaskList();
+    fetchAvailableFolders();
     (async () => {
       setVoice(await getConfig('voice'));
       setSpeechKey(await getConfig('speech_key'));
@@ -265,29 +325,67 @@ const TTSPage: React.FC = () => {
         </Select>
       </Card>
 
-      <Card title="图片生成文稿" style={{ marginTop: 24 }}>
-        <Input value={noteApiKey} onChange={(e) => setNoteApiKey(e.target.value)} placeholder="请输入 API Key" style={{ marginBottom: 8 }} />
-        <Input.TextArea value={notePrompt} onChange={(e) => setNotePrompt(e.target.value)} placeholder="请输入 Prompt" rows={2} style={{ marginBottom: 8 }} />
-        <Space>
-          <Button type="primary" onClick={() => handleGenerateNotes(true)} disabled={selectedImages.length === 0}>
-            生成选中
-          </Button>
-        </Space>
-        <Table
-          rowSelection={{
-            selectedRowKeys: selectedImages,
-            onChange: keys => setSelectedImages(keys as string[])
-          }}
-          dataSource={images.map(i => ({ key: i, image: i }))}
-          columns={[{
-            title: '预览图',
-            render: (row) => (
-              <img src={`http://localhost:8000/processed_images/${encodeURIComponent(row.image)}`} style={{ height: 100 }} onError={(e) => (e.currentTarget.style.display = 'none')} />
-            )
-          }]}
-          pagination={false}
-          style={{ marginTop: 16 }}
-        />
+      <Card title="文稿生成" style={{ marginTop: 24 }}>
+        <div style={{ marginBottom: 16 }}>
+          <Input value={noteApiKey} onChange={(e) => setNoteApiKey(e.target.value)} placeholder="请输入 API Key" style={{ marginBottom: 8 }} />
+          <Input.TextArea value={notePrompt} onChange={(e) => setNotePrompt(e.target.value)} placeholder="请输入 Prompt（可选）" rows={2} style={{ marginBottom: 8 }} />
+        </div>
+
+        <Card type="inner" title="方式一：选择文件夹生成" style={{ marginBottom: 16 }}>
+          <Space style={{ width: '100%' }} direction="vertical">
+            <Space style={{ width: '100%' }}>
+              <Select
+                placeholder="选择 processed_images 下的文件夹"
+                value={selectedFolder || undefined}
+                onChange={setSelectedFolder}
+                style={{ flex: 1 }}
+                showSearch
+                filterOption={(input, option: any) =>
+                  (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
+                }
+              >
+                {availableFolders.map(folder => (
+                  <Option key={folder.name} value={folder.name}>
+                    {folder.name}
+                  </Option>
+                ))}
+              </Select>
+              <Button onClick={fetchAvailableFolders}>刷新</Button>
+            </Space>
+            <Button 
+              type="primary" 
+              onClick={handleGenerateFolderScripts} 
+              disabled={!selectedFolder || generatingFolder}
+              loading={generatingFolder}
+              style={{ width: '100%' }}
+            >
+              {generatingFolder ? '正在生成...' : '生成该文件夹下所有图片的文稿'}
+            </Button>
+          </Space>
+        </Card>
+
+        <Card type="inner" title="方式二：从任务中选择图片生成">
+          <Space style={{ marginBottom: 16 }}>
+            <Button type="primary" onClick={() => handleGenerateNotes(true)} disabled={selectedImages.length === 0}>
+              生成选中图片的文稿
+            </Button>
+          </Space>
+          <Table
+            rowSelection={{
+              selectedRowKeys: selectedImages,
+              onChange: keys => setSelectedImages(keys as string[])
+            }}
+            dataSource={images.map(i => ({ key: i, image: i }))}
+            columns={[{
+              title: '预览图',
+              render: (row) => (
+                <img src={`http://localhost:8000/processed_images/${encodeURIComponent(row.image)}`} style={{ height: 100 }} onError={(e) => (e.currentTarget.style.display = 'none')} />
+              )
+            }]}
+            pagination={false}
+            style={{ marginTop: 16 }}
+          />
+        </Card>
       </Card>
 
       <Space style={{ margin: '16px 0' }}>
