@@ -111,8 +111,14 @@ async def delete_images_by_task(
         pdf_name = task["data"].get("original_filename", "").rsplit(".", 1)[0]
     elif task["type"] == "pdf_to_images":
         pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+    elif task["type"] == "ppt_upload":
+        # PPT任务，使用转换后的PDF文件名
+        pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+    elif task["type"] == "ppt_pdf_to_images":
+        # PPT转图片任务
+        pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
     else:
-        raise HTTPException(status_code=400, detail="不支持的任务类型")
+        raise HTTPException(status_code=400, detail="不支持的任务类型，仅支持 PDF 和 PPT 任务")
     base_dir = PROCESSED_IMG_DIR if black_bordered else IMG_DIR
     target_dir = base_dir / pdf_name
     if not target_dir.exists():
@@ -147,13 +153,19 @@ async def download_image_zip(
         task = task_manager.get_task(task_id)
         if not task:
             raise HTTPException(status_code=404, detail="任务不存在")
-        # 兼容 pdf_upload/pdf_to_images 两种类型
+        # 支持 pdf_upload/pdf_to_images/ppt_upload/ppt_pdf_to_images 四种类型
         if task["type"] == "pdf_upload":
             pdf_name = task["data"].get("original_filename", "").rsplit(".", 1)[0]
         elif task["type"] == "pdf_to_images":
             pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "ppt_upload":
+            # PPT任务，使用转换后的PDF文件名
+            pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "ppt_pdf_to_images":
+            # PPT转图片任务
+            pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
         else:
-            raise HTTPException(status_code=400, detail="不支持的任务类型")
+            raise HTTPException(status_code=400, detail="不支持的任务类型，仅支持 PDF 和 PPT 任务")
     if not pdf_name:
         raise HTTPException(status_code=400, detail="请提供task_id或pdf_name")
     subdir = IMG_DIR / pdf_name
@@ -201,6 +213,7 @@ async def add_black_border_for_pdf_images(
     """
     为图片添加上下黑边
     支持通过 task_id 或 pdf_name 指定目录
+    支持 PDF 和 PPT 任务
     """
     processed = []
     target_dir = None
@@ -208,13 +221,19 @@ async def add_black_border_for_pdf_images(
         task = task_manager.get_task(task_id)
         if not task:
             raise HTTPException(status_code=404, detail="任务不存在")
-        # 兼容 pdf_upload/pdf_to_images 两种类型
+        # 支持 pdf_upload/pdf_to_images/ppt_upload/ppt_pdf_to_images 四种类型
         if task["type"] == "pdf_upload":
             pdf_name = task["data"].get("original_filename", "").rsplit(".", 1)[0]
         elif task["type"] == "pdf_to_images":
             pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "ppt_upload":
+            # PPT任务，使用转换后的PDF文件名
+            pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "ppt_pdf_to_images":
+            # PPT转图片任务
+            pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
         else:
-            raise HTTPException(status_code=400, detail="不支持的任务类型")
+            raise HTTPException(status_code=400, detail="不支持的任务类型，仅支持 PDF 和 PPT 任务")
         target_dir = IMG_DIR / pdf_name
     elif pdf_name:
         target_dir = IMG_DIR / pdf_name
@@ -253,8 +272,14 @@ async def list_images(
             pdf_name = task["data"].get("original_filename", "").rsplit(".", 1)[0]
         elif task["type"] == "pdf_to_images":
             pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "ppt_upload":
+            # PPT任务，使用转换后的PDF文件名
+            pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "ppt_pdf_to_images":
+            # PPT转图片任务
+            pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
         else:
-            return {"images": [], "message": "不支持的任务类型"}
+            return {"images": [], "message": "不支持的任务类型，仅支持 PDF 和 PPT 任务"}
         target_dir = IMG_DIR / pdf_name
     elif pdf_name:
         target_dir = IMG_DIR / pdf_name
@@ -289,8 +314,14 @@ async def list_black_bordered_images(
             pdf_name = task["data"].get("original_filename", "").rsplit(".", 1)[0]
         elif task["type"] == "pdf_to_images":
             pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "ppt_upload":
+            # PPT任务，使用转换后的PDF文件名
+            pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "ppt_pdf_to_images":
+            # PPT转图片任务
+            pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
         else:
-            return {"images": [], "message": "不支持的任务类型"}
+            return {"images": [], "message": "不支持的任务类型，仅支持 PDF 和 PPT 任务"}
         target_dir = PROCESSED_IMG_DIR / pdf_name
     elif pdf_name:
         target_dir = PROCESSED_IMG_DIR / pdf_name

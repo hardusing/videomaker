@@ -20,7 +20,8 @@ custom_breaks = {
 
 
 def tts(filename, output_dir="./srt_and_wav"):
-    voice = get_config_value("voice", "ja-JP-MayuNeural")
+    # 从配置中获取声音设置
+    voice = get_config_value("voice", "ja-JP-DaichiNeural")
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 

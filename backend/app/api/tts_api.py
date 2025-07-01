@@ -5,7 +5,7 @@ from pathlib import Path
 from app.utils.mysql_config_helper import get_config_value, set_config_value
 import os
 from app.tts.tts_engine import tts, find_txt_files
-from app.utils.task_manager import task_manager
+from app.utils.task_manager_memory import task_manager
 from typing import Dict
 import logging
 import json
@@ -70,8 +70,10 @@ def get_config(key: str):
 
 @router.post("/set-voice")
 def set_voice(voice: str = Body(..., embed=True)):
-    set_config_value("voice", voice)
-    return {"message": "voice已更新", "voice": voice}
+    # 使用男生声音 Daichi
+    fixed_voice = "ja-JP-DaichiNeural"
+    set_config_value("voice", fixed_voice)
+    return {"message": "声音已设置为男生Daichi", "voice": fixed_voice}
 
 @router.post("/generate")
 async def generate_all_audio(

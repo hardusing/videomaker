@@ -6,7 +6,7 @@ import zipfile
 import uuid
 from fastapi import BackgroundTasks
 import tempfile
-from app.utils.task_manager import task_manager
+from app.utils.task_manager_memory import task_manager
 
 router = APIRouter()
 

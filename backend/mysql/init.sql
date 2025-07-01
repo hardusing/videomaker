@@ -8,6 +8,6 @@ CREATE TABLE IF NOT EXISTS tts_config (
 );
 
 INSERT INTO tts_config (id, config_key, config_value) VALUES
-(1, 'voice', 'ja-JP-MayuNeural'),
+(1, 'voice', 'ja-JP-DaichiNeural'),
 (4, 'speech_key', 'your-real-key'),
 (5, 'service_region', 'japaneast');

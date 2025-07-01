@@ -13,8 +13,8 @@ const TTSPage: React.FC = () => {
   const [taskList, setTaskList] = useState<{ id: string; name: string }[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string>('');
   const [speechKey, setSpeechKey] = useState('');
-  const [voice, setVoice] = useState('');
-  const [voiceList] = useState<string[]>(['ja-JP-MayuNeural', 'ja-JP-DaichiNeural']);
+  const [voice, setVoice] = useState('ja-JP-DaichiNeural');
+  const [voiceList] = useState<string[]>(['ja-JP-DaichiNeural']); // 使用男生声音
   const [breakResults, setBreakResults] = useState<any[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [generating, setGenerating] = useState(false);
@@ -316,12 +316,16 @@ const TTSPage: React.FC = () => {
         <Select
           value={voice}
           onChange={(v) => {
-            setVoice(v);
-            setConfig('voice', v);
+            // 使用男生声音 Daichi
+            const fixedVoice = 'ja-JP-DaichiNeural';
+            setVoice(fixedVoice);
+            setConfig('voice', fixedVoice);
           }}
           style={{ width: '100%', marginTop: 8 }}
+          disabled={true}
+          placeholder="使用男生声音 Daichi"
         >
-          {voiceList.map(v => <Option key={v}>{v}</Option>)}
+          {voiceList.map(v => <Option key={v}>{v === 'ja-JP-DaichiNeural' ? 'ja-JP-DaichiNeural (男生 - 当前)' : v}</Option>)}
         </Select>
       </Card>
 

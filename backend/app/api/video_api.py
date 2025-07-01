@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 from app.utils.transcoding import encode_video, get_video_info
 import shutil
-from app.utils.task_manager import task_manager
+from app.utils.task_manager_memory import task_manager
 print(shutil.which("ffmpeg"))
 print("当前 PATH：")
 for p in os.environ["PATH"].split(";"):

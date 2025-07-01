@@ -13,7 +13,7 @@ import logging
 import sys
 
 from app.utils.ppt_parser import extract_notes
-from app.utils.task_manager import task_manager, TaskStatus
+from app.utils.task_manager_memory import task_manager, TaskStatus
 
 from app.api import pdf_api
 from app.api import tts_api
@@ -43,7 +43,7 @@ for d in [UPLOAD_DIR, OUTPUT_DIR, AUDIO_OUTPUT_DIR]:
 
 # ✅ 3. 导入 API 模块
 from app.api import pdf_api, tts_api, download_api, notes_api, image_notes_api, video_api, task_api
-from app.utils.task_manager import task_manager  # 确保导入正确
+from app.utils.task_manager_memory import task_manager  # 确保导入正确
 
 
 # ✅ 4. 初始化 FastAPI
@@ -69,8 +69,8 @@ app.mount("/srt_and_wav", StaticFiles(directory=AUDIO_OUTPUT_DIR), name="audio")
 app.mount("/converted_images", StaticFiles(directory="converted_images"), name="converted_images")
 app.mount("/processed_images", StaticFiles(directory="processed_images"), name="processed_images")
 
-# ✅ 6. Redis & 项目模型初始化
-r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+# ✅ 6. 项目模型初始化 (Redis已被内存版task_manager替代)
+# r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
 projects = []
 
 class Project(BaseModel):
@@ -107,7 +107,7 @@ async def upload_pptx(file: UploadFile = File(...)):
             "status": "uploaded"
         }
     )
-    r.set(f"project_task:{project_id}", task_id)
+    # r.set(f"project_task:{project_id}", task_id)  # 不再需要Redis
 
     project = Project(
         id=project_id,

@@ -49,7 +49,7 @@ async def list_all_txt_files(
     target_dir = NOTES_DIR
     subdir = None
     if task_id:
-        from app.utils.task_manager import task_manager
+        from app.utils.task_manager_memory import task_manager
         task = task_manager.get_task(task_id)
         if not task:
             return {"files": []}
@@ -79,7 +79,7 @@ async def get_txt_file_content(
     """
     获取指定目录下的 .txt 文件内容，必须传task_id或dir_name
     """
-    from app.utils.task_manager import task_manager
+    from app.utils.task_manager_memory import task_manager
     subdir = None
     if task_id:
         task = task_manager.get_task(task_id)
@@ -112,7 +112,7 @@ async def rewrite_txt_file(
     """
     获取指定目录下的txt文件内容，去除 breaktime 行，调用 OpenAI 生成清洗版本，保存为 _cleaned.txt 文件并返回
     """
-    from app.utils.task_manager import task_manager
+    from app.utils.task_manager_memory import task_manager
     subdir = None
     if task_id:
         task = task_manager.get_task(task_id)
@@ -165,7 +165,7 @@ async def delete_txt_file(
     """
     删除指定目录下的 .txt 文稿，必须传task_id或dir_name
     """
-    from app.utils.task_manager import task_manager
+    from app.utils.task_manager_memory import task_manager
     subdir = None
     if task_id:
         task = task_manager.get_task(task_id)
@@ -201,7 +201,7 @@ async def search_txt_files(
     """
     在指定目录下所有 .txt 文件中搜索关键词，必须传task_id或dir_name
     """
-    from app.utils.task_manager import task_manager
+    from app.utils.task_manager_memory import task_manager
     subdir = None
     if task_id:
         task = task_manager.get_task(task_id)
@@ -318,7 +318,7 @@ async def generate_script(
         if task_id or filename:
             subdir = None
             if task_id:
-                from app.utils.task_manager import task_manager
+                from app.utils.task_manager_memory import task_manager
                 task = task_manager.get_task(task_id)
                 print(f"[LOG] 通过task_id获取到任务: {task}")
                 if not task:
@@ -556,7 +556,7 @@ async def generate_pages_script(
     if task_id or filename:
         subdir = None
         if task_id:
-            from app.utils.task_manager import task_manager
+            from app.utils.task_manager_memory import task_manager
             task = task_manager.get_task(task_id)
             print(f"[LOG] 通过task_id获取到任务: {task}")
             if not task:
@@ -731,7 +731,7 @@ async def split_script(
     """
     读取指定目录下的txt文件，根据Page标记拆分成多个txt文件
     """
-    from app.utils.task_manager import task_manager
+    from app.utils.task_manager_memory import task_manager
     subdir = None
     if task_id:
         task = task_manager.get_task(task_id)

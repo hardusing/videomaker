@@ -18,11 +18,10 @@ def create_ppt_from_template(template_path: str, output_path: str, slides_data: 
     """
     prs = Presentation(template_path)
     # 定义颜色
-    title_color = RGBColor(9, 87, 161) # 精确颜色 #0957A1
+    title_color = RGBColor(77, 113, 179) # 精确颜色 #4D71B3
     black_color = RGBColor(0, 0, 0) # 黑色
 
     # --- 清空模板中所有已存在的幻灯片 ---
-    # 通过直接操作XML列表来移除所有幻灯片引用
     sldIdLst = prs.slides._sldIdLst
     for i in range(len(sldIdLst) - 1, -1, -1):
         sldId = sldIdLst[i]
@@ -30,127 +29,108 @@ def create_ppt_from_template(template_path: str, output_path: str, slides_data: 
         del sldIdLst[i]
     # ------------------------------------
 
-    # 假设模板的布局：
-    # 0: 标题幻灯片
-    # 1: 标题和内容
     title_slide_layout = prs.slide_layouts[0]
     content_slide_layout = prs.slide_layouts[1]
 
     for i, slide_data in enumerate(slides_data):
         if i == 0 and 'title' in slide_data:
-            # --- 生成第一页 (标题页) ---
-            # 规则 1: 移除模板中的副标题占位符，确保页面上只有主标题。
-            # 这样可以防止不可见的文本框影响主标题的居中。
             slide = prs.slides.add_slide(title_slide_layout)
 
-            # 通常副标题是第二个占位符(placeholders[1])
             if len(slide.placeholders) > 1:
-                subtitle_shape = slide.placeholders[1]
-                sp_element = subtitle_shape._element
-                sp_element.getparent().remove(sp_element)
+                try:
+                    subtitle_shape = slide.placeholders[1]
+                    sp_element = subtitle_shape._element
+                    sp_element.getparent().remove(sp_element)
+                except KeyError:
+                    pass
 
-            # 规则 2: 将主标题的形状调整为与整个幻灯片页面一样大。
-            # 这是实现完美居中的关键步骤。
             title_shape = slide.shapes.title
             title_shape.left = 0
             title_shape.top = 0
             title_shape.width = prs.slide_width
             title_shape.height = prs.slide_height
 
-            # 规则 3: 设置标题的格式。
-            # - 垂直居中 (MSO_ANCHOR.MIDDLE)
-            # - 水平居中 (PP_ALIGN.CENTER)
-            # - 字体: 'Microsoft YaHei', 粗体, 40pt
-            # - 颜色: #0957A1
             title_shape.text = slide_data.get('title', '默认标题')
             text_frame = title_shape.text_frame
-            text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE # 垂直居中
+            text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
             
             p_title = text_frame.paragraphs[0]
-            p_title.alignment = PP_ALIGN.CENTER # 水平居中
+            p_title.alignment = PP_ALIGN.CENTER
             p_title.font.name = 'Microsoft YaHei'
-            p_title.font.bold = True # 设置为粗体
+            p_title.font.bold = True
             p_title.font.size = Pt(40)
             p_title.font.color.rgb = title_color
 
         else:
-            # --- 生成内容页 ---
             slide = prs.slides.add_slide(content_slide_layout)
             
-            # --- 规则 4 & 6: 内容页标题格式与布局 ---
-            # - 使用用户指定的精确厘米值进行布局
-            # - 位置: (X=2.01cm, Y=3.2cm), 高度: 2.19cm
-            
-            # --- 标题框位置与尺寸 ---
             title_shape = slide.shapes.title
             title_shape.left = Cm(2.01)
-            title_shape.top = Cm(3.2)
-            title_shape.width = prs.slide_width - (Cm(2.01) * 2) # 保持左右边距对称
+            title_shape.top = Cm(2.2)
+            title_shape.width = prs.slide_width - (Cm(2.01) * 2)
             title_shape.height = Cm(2.19)
 
             p_title = title_shape.text_frame.paragraphs[0]
             p_title.text = slide_data.get('title', f'第 {i+1} 页')
-            p_title.alignment = PP_ALIGN.LEFT # 左对齐
+            p_title.alignment = PP_ALIGN.LEFT
             p_title.font.name = 'Microsoft YaHei'
-            p_title.font.bold = True # 设置为粗体
+            p_title.font.bold = True
             p_title.font.size = Pt(20)
             p_title.font.color.rgb = title_color
-
-            # --- 规则 5: 内容页正文格式 ---
-            # - 使用 ```...``` 标记来区分代码和普通文本
-            # - 普通文本: 'Microsoft YaHei', 16pt, 黑色
-            # - 代码文本: 'Source Code Pro', 16pt, 黑色
-            # - 行间距: 1.5
-            # - 布局: 自动调整以适应精确的标题布局
+            
             if len(slide.placeholders) > 1:
                 body_shape = slide.placeholders[1]
+                content = slide_data.get('content', '')
+
+                if body_shape is not None:
+                    try:
+                        sp_element = body_shape._element
+                        sp_element.getparent().remove(sp_element)
+                    except Exception:
+                        pass
                 
-                # --- 内容框位置与尺寸 ---
-                body_shape.left = Cm(2.01)
-                # (标题Top + 标题Height + 0.5cm 间距)
-                body_shape.top = Cm(3.2 + 2.19 + 0.5)
-                body_shape.width = prs.slide_width - (Cm(2.01) * 2)
-                # (幻灯片高度 - 内容框Top - 底部边距)
-                body_shape.height = prs.slide_height - body_shape.top - Cm(2.01)
+                content_area_left = Cm(2.01)
+                content_area_top = Cm(2.2 + 2.19 + 0.5)
+                content_area_width = prs.slide_width - (Cm(2.01) * 2)
+                content_area_height = prs.slide_height - content_area_top - Cm(2.01)
+
+                content_blocks = re.split(r'(```.*?```)', content, flags=re.DOTALL)
                 
-                if body_shape:
-                    tf = body_shape.text_frame
+                current_y = content_area_top
+                for block_text in content_blocks:
+                    if not block_text.strip(): continue
+                    
+                    is_code = block_text.startswith('```')
+                    clean_text = block_text[3:-3].strip() if is_code else block_text.strip()
+                    
+                    box = slide.shapes.add_textbox(content_area_left, current_y, content_area_width, Cm(5)) # Start with a default height
+                    tf = box.text_frame
                     tf.clear()
-                    # 清空后，默认会有一个空段落，我们从这个段落开始
+                    tf.word_wrap = True
                     p = tf.paragraphs[0]
-                    first_run_in_frame = True # 标记是否是文本框的第一个run
+                    p.text = clean_text
+                    
+                    if is_code:
+                        font = p.font
+                        font.name = 'Source Code Pro'
+                        font.size = Pt(12)
+                        font.color.rgb = black_color
+                        p.line_spacing = 1.0
+                        fill = box.fill
+                        fill.solid()
+                        fill.fore_color.rgb = RGBColor(240, 240, 240)
+                    else:
+                        font = p.font
+                        font.name = '游ゴシック'
+                        font.size = Pt(16)
+                        font.color.rgb = black_color
+                        p.line_spacing = 1.5
+                    
+                    p.alignment = PP_ALIGN.LEFT
+                    tf.auto_size = True
+                    current_y += tf.height + Pt(10)
 
-                    content = slide_data.get('content', '')
-                    # 使用正则表达式按 ```...``` 分割内容
-                    parts = re.split(r'(```.*?```)', content, flags=re.DOTALL)
 
-                    for part in parts:
-                        if not part: continue
-
-                        is_code = part.startswith('```') and part.endswith('```')
-                        if is_code:
-                            text = part[3:-3].strip('\n') # 移除标记和首尾换行
-                            font_name = 'Source Code Pro'
-                        else:
-                            text = part
-                            font_name = 'Microsoft YaHei'
-                        
-                        lines = text.split('\n')
-                        for line_index, line_text in enumerate(lines):
-                            # 如果不是文本框的第一个run，就新起一个段落
-                            if not first_run_in_frame:
-                                p = tf.add_paragraph()
-                            
-                            run = p.add_run()
-                            run.text = line_text
-                            run.font.name = font_name
-                            run.font.size = Pt(16)
-                            run.font.color.rgb = black_color
-                            p.line_spacing = 1.5
-                            
-                            first_run_in_frame = False # 后续都不是第一个run了
-
-    # 确保输出目录存在
     output_dir = os.path.dirname(output_path)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -159,83 +139,64 @@ def create_ppt_from_template(template_path: str, output_path: str, slides_data: 
     print(f"演示文稿已保存至: {output_path}")
 
 if __name__ == '__main__':
-    # 使用示例
-    # __file__ 是当前脚本的路径, 我们需要找到项目根目录然后定位到模板和输出目录
-    
-    # 获取当前脚本所在目录
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    # 定位到 backend 目录
     backend_dir = os.path.join(current_dir, '..', '..')
     
-    template = os.path.join(backend_dir, 'pptx', 'ppt模板.pptx')
-    output_dir_path = os.path.join(backend_dir, 'outputs') # 定义输出目录
+    template_file = os.path.join(backend_dir, 'pptx', 'ppt模板.pptx')
+    output_dir_path = os.path.join(backend_dir, 'outputs')
     
-    # 幻灯片内容
     slides_content = [
         {
-            'title': '掌握 HTML 文档结构与常用标签',
-            'content': 'Web 前端基础入门'
+            'title': 'ボックスモデルとレイアウトの基礎',
+            'content': 'CSSレイアウトの核心を理解する'
         },
         {
-            'title': '什么是 HTML?',
-            'content': 'HTML 全称超文本标记语言 (HyperText Markup Language)，是构建网页和网络应用的标准语言。\n它并非编程语言，而是一种标记语言，通过不同的"标签"来定义页面内容的结构和含义。'
+            'title': '1. ボックスモデルの概要',
+            'content': 'すべてのHTML要素は、ブラウザによって四角形の「ボックス」として描画されます。このボックスは4つの層から構成されており、CSSでレイアウトを調整する際の基本的な単位となります。\n\n- **内容 (Content)**: テキストや画像が表示される中心領域。\n- **内側余白 (Padding)**: 内容と枠線の間の透明なスペース。\n- **枠線 (Border)**: Paddingを囲む線。太さ、色、スタイルを指定可能。\n- **外側余白 (Margin)**: 枠線の外側にある透明なスペース。他の要素との距離を定義します。'
         },
         {
-            'title': 'HTML 文档基本结构',
-            'content': '每个HTML文档都遵循一个标准结构，就像一本书有封面、目录和正文。\n这是一个最基础的HTML5文档示例：\n```<!DOCTYPE html>\n<html>\n<head>\n  <title>页面标题</title>\n</head>\n<body>\n  <h1>我的第一个标题</h1>\n  <p>我的第一个段落。</p>\n</body>\n</html>```'
+            'title': '2. Content・Padding・Border・Marginの違い',
+            'content': 'CSSプロパティを使って、ボックスモデルの各層を具体的に制御します。これにより、要素の内部的な余白や、他の要素との間隔を自由に設定できます。\n\n以下のコードは、ボックスに内側余白、枠線、外側余白を同時に指定した例です。\n```.box {\n  padding: 10px; /* 内側余白を上下左右に10px */\n  border: 2px solid black; /* 2pxの黒い実線の枠 */\n  margin: 20px; /* 外側余白を上下左右に20px */\n}```'
         },
         {
-            'title': '文档头部 <head>',
-            'content': '<head> 元素包含了文档的"元数据"，这些信息不会直接显示在页面上，但对浏览器和搜索引擎至关重要。\n- ```<title>```: 定义浏览器标签页上显示的标题。\n- ```<meta charset="UTF-8">```: 指定文档使用的字符编码。\n- ```<link rel="stylesheet" href="styles.css">```: 链接外部CSS样式表。'
+            'title': '3. widthとheightの指定',
+            'content': '`width` と `height` プロパティは、要素の「内容(Content)」領域のサイズをデフォルトで指定します。PaddingやBorderのサイズはこれに含まれないため、全体の大きさは `width` + `padding` + `border` となります。\n\nこの挙動は `box-sizing: border-box;` を指定することで変更でき、`width` と `height` が枠線まで含んだ全体のサイズを示すようになり、直感的なレイアウト作成が可能になります。\n```.box {\n  width: 300px; /* 内容領域の幅が300px */\n  height: 150px; /* 内容領域の高さが150px */\n}```'
         },
         {
-            'title': '文档主体 <body>',
-            'content': '<body> 元素包含了用户在浏览器中看到的所有可见内容，是网页的"血肉"。\n所有的文本、图片、链接、表格、表单等元素都应放置在 ```<body>``` 标签内部。'
+            'title': '4. displayプロパティの基礎',
+            'content': '`display` プロパティは、要素がどのように表示され、他の要素とどう影響しあうかを決定します。主な値は以下の通りです。\n\n- **block**: 幅が親要素いっぱいに広がり、前後に改行が入ります。(例: `<div>`, `<p>`)\n- **inline**: 必要な幅しか持たず、前後に改行が入りません。`width` や `height` は指定できません。(例: `<span>`, `<a>`)\n- **inline-block**: `inline` のように他の要素と並びますが、`block` のように `width` や `height` を指定できます。'
         },
         {
-            'title': '常用标签：标题和段落',
-            'content': '标题和段落是文本内容的基础。\n- 标题 (Headings): 使用 ```<h1>``` 到 ```<h6>``` 标签定义，h1最重要，h6最次要。\n- 段落 (Paragraphs): 使用 ```<p>``` 标签定义一个文本段落。\n```<h1>这是最重要的标题</h1>\n<p>这是一个段落。</p>```'
+            'title': '5. positionプロパティの基本',
+            'content': '`position` プロパティは、要素の配置方法を標準のドキュメントフローから変更する際に使用します。\n\n- **static**: デフォルト値。通常の流れに従って配置されます。\n- **relative**: 通常の位置を基準に、`top`, `right`, `bottom`, `left` で相対的に位置を調整できます。\n- **absolute**: 親要素の中で `position` が `static` 以外に指定された最も近いものを基準に絶対位置で配置されます。\n- **fixed**: ブラウザの表示領域（ビューポート）を基準に固定位置で配置され、スクロールしても動きません。'
         },
         {
-            'title': '常用标签：列表',
-            'content': '列表用于组织和展示项目集合。\n- 无序列表 (Unordered List): 使用 ```<ul>``` 和 ```<li>```。\n```<ul>\n  <li>苹果</li>\n  <li>香蕉</li>\n</ul>```\n- 有序列表 (Ordered List): 使用 ```<ol>``` 和 ```<li>```。\n```<ol>\n  <li>第一步</li>\n  <li>第二步</li>\n</ol>```'
+            'title': '6. Flexboxの導入',
+            'content': 'Flexboxは、1次元（縦一列または横一列）のレイアウトを簡単かつ柔軟に構築するための仕組みです。要素間のスペースの分配や、中央揃えなどを直感的に行うことができます。\n\nコンテナ要素に `display: flex;` を指定することで、その子要素（アイテム）がFlexboxのレイアウトに従うようになります。\n```.container {\n  display: flex;\n  /* アイテムを水平方向の中央に揃える */\n  justify-content: center;\n}```'
         },
         {
-            'title': '常用标签：链接',
-            'content': '链接 (Anchor) 是超文本的核心，使用 ```<a>``` 标签创建。\n- `href` 属性指定链接的目标地址。\n- 标签内的文本是用户可点击的部分。\n```<a href="https://www.google.com">点击这里访问谷歌</a>```'
+            'title': '7. Flexboxの主なプロパティ',
+            'content': 'Flexboxはコンテナとアイテムにそれぞれプロパティを指定することで、多彩なレイアウトを実現します。\n\n**コンテナ側の主なプロパティ:**\n- `justify-content`: 主軸（横方向）の揃え方を指定 (例: `flex-start`, `center`, `space-between`)\n- `align-items`: 交差軸（縦方向）の揃え方を指定 (例: `flex-start`, `center`, `stretch`)\n- `flex-direction`: 主軸の方向を指定 (`row` または `column`)'
         },
         {
-            'title': '常用标签：图片',
-            'content': '图片使用 ```<img>``` 标签嵌入到页面中。这是一个自闭合标签。\n- `src` 属性指定图片的来源地址。\n- `alt` 属性提供图片的替代文本，用于可访问性和图片加载失败的情况。\n```<img src="logo.png" alt="网站Logo">```'
+            'title': '8. Gridレイアウトの概要',
+            'content': 'Gridレイアウトは、行と列から成る2次元の格子状レイアウトを構築するための強力なシステムです。Flexboxが1次元のレイアウトを得意とするのに対し、Gridはより複雑で大規模なレイアウト設計に適しています。\n\nコンテナに `display: grid;` を指定し、`grid-template-columns` や `grid-template-rows` で格子構造を定義します。\n```.grid-container {\n  display: grid;\n  /* 2つの列を作成。1列目は利用可能スペースの1/3、2列目は2/3を占める */\n  grid-template-columns: 1fr 2fr;\n}```'
         },
         {
-            'title': '常用标签：文本格式化',
-            'content': '除了标题和段落，还有一些标签用于给予文本特殊的语义或样式。\n- ```<strong>```: 表示重要的文本（通常显示为粗体）。\n- ```<em>```: 表示强调的文本（通常显示为斜体）。\n- ```<code>```: 表示一段计算机代码（常用于行内代码）。'
+            'title': '9. floatとclearの使い方',
+            'content': '`float` は、主に画像などを横に配置し、後続のテキストをその周りに回り込ませるために使われる古典的なプロパティです。しかし、`float` を使うと親要素の高さが認識されなくなるなどのレイアウト崩れが起きやすいという欠点があります。\n\n`clear` プロパティは、`float` による回り込みを解除するために使用されます。\n```img {\n  float: left; /* 画像を左に寄せる */\n  margin-right: 10px;\n}\n\n.clearfix::after {\n  content: "";\n  display: block;\n  clear: both; /* floatを解除するおまじない */\n}```'
         },
         {
-            'title': '常用标签：表格',
-            'content': '表格用于展示结构化的二维数据。\n```<table>\n  <tr>\n    <th>姓名</th>\n    <th>年龄</th>\n  </tr>\n  <tr>\n    <td>张三</td>\n    <td>25</td>\n  </tr>\n</table>```'
-        },
-        {
-            'title': '常用标签：表单',
-            'content': '表单用于收集用户输入。\n```<form action="/submit">\n  <label for="username">用户名:</label><br>\n  <input type="text" id="username" name="username"><br>\n  <input type="submit" value="提交">\n</form>```'
-        },
-        {
-            'title': '总结',
-            'content': '今天我们学习了HTML的基本骨架和最常用的标签。\n- HTML定义了网页的结构和内容。\n- 标签是HTML的基石，大部分标签都是成对出现的。\n- 不断练习是掌握这些标签的最好方法。'
+            'title': '10. レスポンシブレイアウトの考え方',
+            'content': 'レスポンシブレイアウトとは、PC、タブレット、スマートフォンなど、異なる画面サイズのデバイスでウェブサイトが最適に表示されるように設計する考え方です。\n\nCSSの「メディアクエリ (`@media`)」を使用することで、特定の画面幅になったときに適用するスタイルを切り替えることができます。\n```/* 画面幅が768px以下の場合に適用 */\n@media (max-width: 768px) {\n  .container {\n    /* 例えば、横並びを縦並びに変更 */\n    flex-direction: column;\n  }\n}```'
         }
     ]
     
-    # --- 根据第一页标题自动生成文件名 ---
-    # 获取标题文本
     first_page_title = slides_content[0].get('title', 'generated_presentation')
-    # 移除windows文件名中的非法字符
     safe_filename = "".join([c for c in first_page_title if c not in r'\\/:*?"<>|']) + ".pptx"
     output_file_path = os.path.join(output_dir_path, safe_filename)
-    # ------------------------------------
     
-    # 检查模板文件是否存在
-    if not os.path.exists(template):
-        print(f"错误：模板文件未找到，路径: {template}")
+    if not os.path.exists(template_file):
+        print(f"错误：模板文件未找到，路径: {template_file}")
     else:
-        create_ppt_from_template(template, output_file_path, slides_content) 
+        create_ppt_from_template(template_file, output_file_path, slides_content) 
