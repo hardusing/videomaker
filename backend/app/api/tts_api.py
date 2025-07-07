@@ -14,11 +14,23 @@ AUDIO_OUTPUT_DIR = "./srt_and_wav"
 NOTES_DIR = "./notes_output"
 router = APIRouter(prefix="/api/tts", tags=["TTS配置"])
 
+# 性别与声音的映射
+VOICE_MAPPING = {
+    "male": "ja-JP-DaichiNeural",    # 男声
+    "female": "ja-JP-ShioriNeural"  # 女声
+}
+
 tts_tasks: Dict[str, dict] = {}
 tts_tasks_by_filename: Dict[str, dict] = {}
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
+
+# 在文件开头添加性别映射配置
+VOICE_MAPPING = {
+    "male": "ja-JP-DaichiNeural",    # 男声
+    "female": "ja-JP-ShioriNeural"  # 女声
+}
 
 class ConfigItem(BaseModel):
     key: str
@@ -26,6 +38,8 @@ class ConfigItem(BaseModel):
 
 class SingleTTSRequest(BaseModel):
     filename: str  # 例如 "lesson01.txt"
+    gender: str = "male"  # 性别字段：male(男声) 或 female(女声)，默认男声
+    gender: str = "male"  # 新增：性别字段，默认男声
 
 @router.get("/texts")
 def list_txt_files(
@@ -78,13 +92,22 @@ def set_voice(voice: str = Body(..., embed=True)):
 @router.post("/generate")
 async def generate_all_audio(
     task_id: str = Query(None, description="任务ID"),
-    filename: str = Query(None, description="文件名/目录名")
+    filename: str = Query(None, description="文件名/目录名"),
+    gender: str = Query("male", description="声音性别：male(男声) 或 female(女声)")
 ):
     """
     生成所有音频和字幕，支持task_id和filename双入口。
     优先使用task_id，若没有则使用filename。
+    新增gender参数控制男声或女声。
     """
-    logging.info(f"🚀 开始执行 generate_all_audio, task_id: {task_id}, filename: {filename}")
+    # 验证性别参数
+    if gender not in VOICE_MAPPING:
+        raise HTTPException(status_code=400, detail="性别参数必须是 'male' 或 'female'")
+    
+    # 设置对应的声音
+    voice = VOICE_MAPPING[gender]
+    
+    logging.info(f"🚀 开始执行 generate_all_audio, task_id: {task_id}, filename: {filename}, gender: {gender}, voice: {voice}")
     
     notes_dir = Path(NOTES_DIR)
     subdir = None
@@ -129,8 +152,8 @@ async def generate_all_audio(
     for idx, path in enumerate(raw_txt, 1):
         logging.info(f"🔄 开始处理第 {idx}/{total} 个文件: {path.name}")
         try:
-            logging.info(f"🎵 开始生成音频: {path.name}")
-            tts(path, output_dir=str(output_dir))
+            logging.info(f"🔄 开始生成音频: {path.name}, 使用声音: {voice}")
+            tts(path, output_dir=str(output_dir), voice=voice)
             wav_name = path.stem + ".wav"
             srt_name = path.stem + "_merged.srt"
             audio_path = output_dir / wav_name
@@ -237,12 +260,21 @@ async def ws_generate_all_audio(websocket: WebSocket):
         await websocket.send_json({"status": "error", "message": str(e)})
         await websocket.close()
 
-async def generate_all_audio_with_ws(websocket, task_id, filename):
+async def generate_all_audio_with_ws(websocket, task_id, filename, gender="male"):
     import asyncio
     import logging
+    
+    # 验证性别参数
+    if gender not in VOICE_MAPPING:
+        await websocket.send_json({"error": "性别参数必须是 'male' 或 'female'"})
+        return
+    
+    # 设置对应的声音
+    voice = VOICE_MAPPING[gender]
+    
     notes_dir = Path(NOTES_DIR)
     subdir = None
-    logging.info(f"[WS] 进入 generate_all_audio_with_ws, task_id={task_id}, filename={filename}")
+    logging.info(f"[WS] 进入 generate_all_audio_with_ws, task_id={task_id}, filename={filename}, gender={gender}, voice={voice}")
     if task_id:
         logging.info(f"[WS] 查找任务: {task_id}")
         task = task_manager.get_task(task_id)
@@ -287,8 +319,8 @@ async def generate_all_audio_with_ws(websocket, task_id, filename):
     for idx, path in enumerate(raw_txt, 1):
         logging.info(f"[WS] 开始处理第 {idx}/{total} 个文件: {path.name}")
         try:
-            logging.info(f"[WS] 调用 tts 处理: {path}")
-            tts(path, output_dir=str(output_dir))
+            logging.info(f"[WS] 调用 tts 处理: {path}, 使用声音: {voice}")
+            tts(path, output_dir=str(output_dir), voice=voice)  # 传递voice参数
             wav_name = path.stem + ".wav"
             srt_name = path.stem + "_merged.srt"
             audio_path = output_dir / wav_name
@@ -376,14 +408,24 @@ def check_all_merged_srt():
 def generate_selected_audio(
     task_id: str = Query(None, description="任务ID"),
     filename: str = Query(None, description="文件名/目录名"),
-    filenames: list = Body(..., embed=True, description="要生成的txt文件名列表")
+    filenames: list = Body(..., embed=True, description="要生成的txt文件名列表"),
+    gender: str = Query("male", description="声音性别：male(男声) 或 female(女声)")
 ):
     """
     批量生成选中的txt文件的音频和字幕，流式返回进度和结果。
     支持task_id和filename双入口。
     优先使用task_id，若没有则使用filename。
+    新增gender参数控制男声或女声。
     """
     import json
+    
+    # 验证性别参数
+    if gender not in VOICE_MAPPING:
+        raise HTTPException(status_code=400, detail="性别参数必须是 'male' 或 'female'")
+    
+    # 设置对应的声音
+    voice = VOICE_MAPPING[gender]
+    
     subdir = None
     if task_id:
         task = task_manager.get_task(task_id)
@@ -414,7 +456,7 @@ def generate_selected_audio(
     def generate():
         for idx, txt_path in enumerate(selected_files, 1):
             try:
-                tts(txt_path, output_dir=str(output_dir))
+                tts(txt_path, output_dir=str(output_dir), voice=voice)  # 传递voice参数
                 wav_name = txt_path.stem + ".wav"
                 srt_name = txt_path.stem + "_merged.srt"
                 audio_path = output_dir / wav_name
@@ -441,7 +483,7 @@ def generate_selected_audio(
                     if filename:
                         tts_tasks_by_filename[filename] = tts_tasks[task_id]
                         logging.info("当前 tts_tasks_by_filename 状态：%s", tts_tasks_by_filename)
-                logging.info(f"✅ 成功生成音频: {txt_path.name}")
+                logging.info(f"✅ 成功生成音频: {txt_path.name}, 使用声音: {voice}")
             except Exception as e:
                 result = {
                     "filename": txt_path.name,
@@ -477,10 +519,22 @@ async def ws_generate_selected_audio(websocket: WebSocket, task_id: str):
     try:
         data = await websocket.receive_json()
         filenames = data.get("filenames", [])
+        gender = data.get("gender", "male")  # 新增：获取性别参数，默认男声
+        
         if not isinstance(filenames, list) or not filenames:
             await websocket.send_json({"error": "请提供要生成的txt文件名列表"})
             await websocket.close()
             return
+            
+        # 验证性别参数
+        if gender not in VOICE_MAPPING:
+            await websocket.send_json({"error": "性别参数必须是 'male' 或 'female'"})
+            await websocket.close()
+            return
+        
+        # 设置对应的声音
+        voice = VOICE_MAPPING[gender]
+        
         task = task_manager.get_task(task_id)
         if not task:
             await websocket.send_json({"error": "任务不存在"})
@@ -512,7 +566,7 @@ async def ws_generate_selected_audio(websocket: WebSocket, task_id: str):
         results = []
         for idx, txt_path in enumerate(selected_files, 1):
             try:
-                tts(txt_path, output_dir=str(output_dir))
+                tts(txt_path, output_dir=str(output_dir), voice=voice)  # 传递voice参数
                 wav_name = txt_path.stem + ".wav"
                 srt_name = txt_path.stem + "_merged.srt"
                 audio_path = output_dir / wav_name
@@ -539,7 +593,7 @@ async def ws_generate_selected_audio(websocket: WebSocket, task_id: str):
                     if pdf_name:
                         tts_tasks_by_filename[pdf_name] = tts_tasks[task_id]
                         logging.info("当前 tts_tasks_by_filename 状态：%s", tts_tasks_by_filename)
-                logging.info(f"✅ 成功生成音频: {txt_path.name}")
+                logging.info(f"✅ 成功生成音频: {txt_path.name}, 使用声音: {voice}")
             except Exception as e:
                 result = {
                     "filename": txt_path.name,
@@ -573,4 +627,44 @@ async def ws_generate_selected_audio(websocket: WebSocket, task_id: str):
     except Exception as e:
         await websocket.send_json({"error": str(e)})
         await websocket.close()
+
+@router.post("/set-gender")
+def set_gender(gender: str = Body(..., embed=True)):
+    """
+    设置TTS性别
+    gender: "male" 或 "female"
+    """
+    if gender not in VOICE_MAPPING:
+        raise HTTPException(status_code=400, detail="性别参数必须是 'male' 或 'female'")
+    
+    voice = VOICE_MAPPING[gender]
+    set_config_value("voice", voice)
+    
+    gender_name = "男声" if gender == "male" else "女声"
+    return {
+        "message": f"声音已设置为{gender_name}",
+        "gender": gender,
+        "voice": voice
+    }
+
+@router.get("/get-gender")
+def get_gender():
+    """
+    获取当前TTS性别设置
+    """
+    current_voice = get_config_value("voice", "ja-JP-DaichiNeural")
+    
+    # 根据voice反向查找gender
+    gender = "male"  # 默认
+    for g, v in VOICE_MAPPING.items():
+        if v == current_voice:
+            gender = g
+            break
+    
+    gender_name = "男声" if gender == "male" else "女声"
+    return {
+        "gender": gender,
+        "voice": current_voice,
+        "gender_name": gender_name
+    }
 

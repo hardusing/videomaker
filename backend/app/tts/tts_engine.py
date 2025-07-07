@@ -19,9 +19,10 @@ custom_breaks = {
 }
 
 
-def tts(filename, output_dir="./srt_and_wav"):
-    # 从配置中获取声音设置
-    voice = get_config_value("voice", "ja-JP-DaichiNeural")
+def tts(filename, output_dir="./srt_and_wav", voice=None):
+    # 如果没有传入voice参数，从配置中获取声音设置
+    if voice is None:
+        voice = get_config_value("voice", "ja-JP-DaichiNeural")
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -34,7 +35,7 @@ def tts(filename, output_dir="./srt_and_wav"):
     merged_srt_path = os.path.join(output_dir, fn_prefix + "_merged.srt")
 
     try:
-        print(f"🔄 开始处理 {filename}")
+        print(f"🔄 开始处理 {filename}, 使用声音: {voice}")
         controlable_text_to_speech_with_subtitle(
             speech_key=speech_key,
             service_region=service_region,
