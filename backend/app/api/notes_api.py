@@ -481,6 +481,7 @@ async def generate_folder_scripts(
                 ]},
             ],
             "temperature": 0.4,
+            "max_tokens": 4000,
             "user": "DMXAPI",
         }
         
@@ -611,6 +612,7 @@ async def generate_pages_script(
                     ]},
                 ],
                 "temperature": 0.4,
+                "max_tokens": 4000,
                 "user": "DMXAPI",
             }
             headers = {
@@ -683,6 +685,7 @@ async def generate_pages_script(
                         ]},
                     ],
                     "temperature": 0.4,
+                    "max_tokens": 4000,
                     "user": "DMXAPI",
                 }
                 headers = {

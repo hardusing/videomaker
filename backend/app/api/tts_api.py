@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api/tts", tags=["TTS配置"])
 # 性别与声音的映射
 VOICE_MAPPING = {
     "male": "ja-JP-DaichiNeural",    # 男声
-    "female": "ja-JP-ShioriNeural"  # 女声
+    "female": "ja-JP-MayuNeural"    # 女声
 }
 
 tts_tasks: Dict[str, dict] = {}
@@ -26,20 +26,12 @@ tts_tasks_by_filename: Dict[str, dict] = {}
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 
-# 在文件开头添加性别映射配置
-VOICE_MAPPING = {
-    "male": "ja-JP-DaichiNeural",    # 男声
-    "female": "ja-JP-ShioriNeural"  # 女声
-}
-
 class ConfigItem(BaseModel):
     key: str
     value: str
 
 class SingleTTSRequest(BaseModel):
     filename: str  # 例如 "lesson01.txt"
-    gender: str = "male"  # 性别字段：male(男声) 或 female(女声)，默认男声
-    gender: str = "male"  # 新增：性别字段，默认男声
 
 @router.get("/texts")
 def list_txt_files(
@@ -152,7 +144,7 @@ async def generate_all_audio(
     for idx, path in enumerate(raw_txt, 1):
         logging.info(f"🔄 开始处理第 {idx}/{total} 个文件: {path.name}")
         try:
-            logging.info(f"🔄 开始生成音频: {path.name}, 使用声音: {voice}")
+            logging.info(f"🎵 开始生成音频: {path.name}, 使用声音: {voice}")
             tts(path, output_dir=str(output_dir), voice=voice)
             wav_name = path.stem + ".wav"
             srt_name = path.stem + "_merged.srt"
@@ -260,21 +252,12 @@ async def ws_generate_all_audio(websocket: WebSocket):
         await websocket.send_json({"status": "error", "message": str(e)})
         await websocket.close()
 
-async def generate_all_audio_with_ws(websocket, task_id, filename, gender="male"):
+async def generate_all_audio_with_ws(websocket, task_id, filename):
     import asyncio
     import logging
-    
-    # 验证性别参数
-    if gender not in VOICE_MAPPING:
-        await websocket.send_json({"error": "性别参数必须是 'male' 或 'female'"})
-        return
-    
-    # 设置对应的声音
-    voice = VOICE_MAPPING[gender]
-    
     notes_dir = Path(NOTES_DIR)
     subdir = None
-    logging.info(f"[WS] 进入 generate_all_audio_with_ws, task_id={task_id}, filename={filename}, gender={gender}, voice={voice}")
+    logging.info(f"[WS] 进入 generate_all_audio_with_ws, task_id={task_id}, filename={filename}")
     if task_id:
         logging.info(f"[WS] 查找任务: {task_id}")
         task = task_manager.get_task(task_id)
@@ -319,8 +302,8 @@ async def generate_all_audio_with_ws(websocket, task_id, filename, gender="male"
     for idx, path in enumerate(raw_txt, 1):
         logging.info(f"[WS] 开始处理第 {idx}/{total} 个文件: {path.name}")
         try:
-            logging.info(f"[WS] 调用 tts 处理: {path}, 使用声音: {voice}")
-            tts(path, output_dir=str(output_dir), voice=voice)  # 传递voice参数
+            logging.info(f"[WS] 调用 tts 处理: {path}")
+            tts(path, output_dir=str(output_dir))
             wav_name = path.stem + ".wav"
             srt_name = path.stem + "_merged.srt"
             audio_path = output_dir / wav_name
@@ -408,24 +391,14 @@ def check_all_merged_srt():
 def generate_selected_audio(
     task_id: str = Query(None, description="任务ID"),
     filename: str = Query(None, description="文件名/目录名"),
-    filenames: list = Body(..., embed=True, description="要生成的txt文件名列表"),
-    gender: str = Query("male", description="声音性别：male(男声) 或 female(女声)")
+    filenames: list = Body(..., embed=True, description="要生成的txt文件名列表")
 ):
     """
     批量生成选中的txt文件的音频和字幕，流式返回进度和结果。
     支持task_id和filename双入口。
     优先使用task_id，若没有则使用filename。
-    新增gender参数控制男声或女声。
     """
     import json
-    
-    # 验证性别参数
-    if gender not in VOICE_MAPPING:
-        raise HTTPException(status_code=400, detail="性别参数必须是 'male' 或 'female'")
-    
-    # 设置对应的声音
-    voice = VOICE_MAPPING[gender]
-    
     subdir = None
     if task_id:
         task = task_manager.get_task(task_id)
@@ -456,7 +429,7 @@ def generate_selected_audio(
     def generate():
         for idx, txt_path in enumerate(selected_files, 1):
             try:
-                tts(txt_path, output_dir=str(output_dir), voice=voice)  # 传递voice参数
+                tts(txt_path, output_dir=str(output_dir))
                 wav_name = txt_path.stem + ".wav"
                 srt_name = txt_path.stem + "_merged.srt"
                 audio_path = output_dir / wav_name
@@ -483,7 +456,7 @@ def generate_selected_audio(
                     if filename:
                         tts_tasks_by_filename[filename] = tts_tasks[task_id]
                         logging.info("当前 tts_tasks_by_filename 状态：%s", tts_tasks_by_filename)
-                logging.info(f"✅ 成功生成音频: {txt_path.name}, 使用声音: {voice}")
+                logging.info(f"✅ 成功生成音频: {txt_path.name}")
             except Exception as e:
                 result = {
                     "filename": txt_path.name,
@@ -512,121 +485,6 @@ def generate_selected_audio(
             }
             task_manager.update_task(task_id, data=task_data)
     return StreamingResponse(generate(), media_type="application/x-ndjson")
-
-@router.websocket("/ws/generate-selected/{task_id}")
-async def ws_generate_selected_audio(websocket: WebSocket, task_id: str):
-    await websocket.accept()
-    try:
-        data = await websocket.receive_json()
-        filenames = data.get("filenames", [])
-        gender = data.get("gender", "male")  # 新增：获取性别参数，默认男声
-        
-        if not isinstance(filenames, list) or not filenames:
-            await websocket.send_json({"error": "请提供要生成的txt文件名列表"})
-            await websocket.close()
-            return
-            
-        # 验证性别参数
-        if gender not in VOICE_MAPPING:
-            await websocket.send_json({"error": "性别参数必须是 'male' 或 'female'"})
-            await websocket.close()
-            return
-        
-        # 设置对应的声音
-        voice = VOICE_MAPPING[gender]
-        
-        task = task_manager.get_task(task_id)
-        if not task:
-            await websocket.send_json({"error": "任务不存在"})
-            await websocket.close()
-            return
-        if task["type"] == "pdf_upload":
-            pdf_name = task["data"].get("original_filename", "").rsplit(".", 1)[0]
-        elif task["type"] == "pdf_to_images":
-            pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
-        elif task["type"] == "ppt_upload":
-            pdf_name = task["data"].get("original_filename", "").rsplit(".", 1)[0]
-        else:
-            await websocket.send_json({"error": "不支持的任务类型"})
-            await websocket.close()
-            return
-        notes_dir = Path(NOTES_DIR) / pdf_name
-        output_dir = Path(AUDIO_OUTPUT_DIR) / pdf_name
-        output_dir.mkdir(parents=True, exist_ok=True)
-        if not notes_dir.exists() or not notes_dir.is_dir():
-            await websocket.send_json({"error": "任务文稿目录不存在"})
-            await websocket.close()
-            return
-        selected_files = [notes_dir / f for f in filenames if (notes_dir / f).exists() and f.endswith('.txt')]
-        total = len(selected_files)
-        if total == 0:
-            await websocket.send_json({"error": "没有可处理的文件"})
-            await websocket.close()
-            return
-        results = []
-        for idx, txt_path in enumerate(selected_files, 1):
-            try:
-                tts(txt_path, output_dir=str(output_dir), voice=voice)  # 传递voice参数
-                wav_name = txt_path.stem + ".wav"
-                srt_name = txt_path.stem + "_merged.srt"
-                audio_path = output_dir / wav_name
-                srt_path = output_dir / srt_name
-                result = {
-                    "filename": txt_path.name,
-                    "audio_file": audio_path.name if audio_path.exists() else None,
-                    "subtitle_file": srt_path.name if srt_path.exists() else None,
-                    "status": "success",
-                    "progress": int(idx / total * 100)
-                }
-                # 实时写入全局进度
-                if task_id:
-                    tts_tasks[task_id] = {
-                        "status": "processing" if idx < total else "completed",
-                        "progress": int(idx / total * 100),
-                        "current": idx,
-                        "total": total,
-                        "current_file": txt_path.name,
-                        "results": results.copy()
-                    }
-                    logging.info("当前 tts_tasks 状态：%s", tts_tasks)
-                    # 同时更新 tts_tasks_by_filename
-                    if pdf_name:
-                        tts_tasks_by_filename[pdf_name] = tts_tasks[task_id]
-                        logging.info("当前 tts_tasks_by_filename 状态：%s", tts_tasks_by_filename)
-                logging.info(f"✅ 成功生成音频: {txt_path.name}, 使用声音: {voice}")
-            except Exception as e:
-                result = {
-                    "filename": txt_path.name,
-                    "audio_file": None,
-                    "subtitle_file": None,
-                    "status": "failed",
-                    "error": str(e),
-                    "progress": int(idx / total * 100)
-                }
-                # 实时写入全局进度
-                if task_id:
-                    tts_tasks[task_id] = {
-                        "status": "failed",
-                        "error": str(e)
-                    }
-                    logging.info("当前 tts_tasks 状态：%s", tts_tasks)
-            results.append(result)
-            logging.info(f"📤 推送中: {result}")
-            await websocket.send_json(result)
-        # 更新任务状态
-        task_data = task.get("data", {})
-        task_data["tts_generate_selected"] = {
-            "status": "completed",
-            "progress": 100,
-            "results": results
-        }
-        task_manager.update_task(task_id, data=task_data)
-        await websocket.close()
-    except WebSocketDisconnect:
-        pass
-    except Exception as e:
-        await websocket.send_json({"error": str(e)})
-        await websocket.close()
 
 @router.post("/set-gender")
 def set_gender(gender: str = Body(..., embed=True)):
@@ -667,4 +525,107 @@ def get_gender():
         "voice": current_voice,
         "gender_name": gender_name
     }
+
+@router.websocket("/ws/generate-selected/{task_id}")
+async def ws_generate_selected_audio(websocket: WebSocket, task_id: str):
+    await websocket.accept()
+    try:
+        data = await websocket.receive_json()
+        filenames = data.get("filenames", [])
+        if not isinstance(filenames, list) or not filenames:
+            await websocket.send_json({"error": "请提供要生成的txt文件名列表"})
+            await websocket.close()
+            return
+        task = task_manager.get_task(task_id)
+        if not task:
+            await websocket.send_json({"error": "任务不存在"})
+            await websocket.close()
+            return
+        if task["type"] == "pdf_upload":
+            pdf_name = task["data"].get("original_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "pdf_to_images":
+            pdf_name = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
+        elif task["type"] == "ppt_upload":
+            pdf_name = task["data"].get("original_filename", "").rsplit(".", 1)[0]
+        else:
+            await websocket.send_json({"error": "不支持的任务类型"})
+            await websocket.close()
+            return
+        notes_dir = Path(NOTES_DIR) / pdf_name
+        output_dir = Path(AUDIO_OUTPUT_DIR) / pdf_name
+        output_dir.mkdir(parents=True, exist_ok=True)
+        if not notes_dir.exists() or not notes_dir.is_dir():
+            await websocket.send_json({"error": "任务文稿目录不存在"})
+            await websocket.close()
+            return
+        selected_files = [notes_dir / f for f in filenames if (notes_dir / f).exists() and f.endswith('.txt')]
+        total = len(selected_files)
+        if total == 0:
+            await websocket.send_json({"error": "没有可处理的文件"})
+            await websocket.close()
+            return
+        results = []
+        for idx, txt_path in enumerate(selected_files, 1):
+            try:
+                tts(txt_path, output_dir=str(output_dir))
+                wav_name = txt_path.stem + ".wav"
+                srt_name = txt_path.stem + "_merged.srt"
+                audio_path = output_dir / wav_name
+                srt_path = output_dir / srt_name
+                result = {
+                    "filename": txt_path.name,
+                    "audio_file": audio_path.name if audio_path.exists() else None,
+                    "subtitle_file": srt_path.name if srt_path.exists() else None,
+                    "status": "success",
+                    "progress": int(idx / total * 100)
+                }
+                # 实时写入全局进度
+                if task_id:
+                    tts_tasks[task_id] = {
+                        "status": "processing" if idx < total else "completed",
+                        "progress": int(idx / total * 100),
+                        "current": idx,
+                        "total": total,
+                        "current_file": txt_path.name,
+                        "results": results.copy()
+                    }
+                    logging.info("当前 tts_tasks 状态：%s", tts_tasks)
+                    # 同时更新 tts_tasks_by_filename
+                    if pdf_name:
+                        tts_tasks_by_filename[pdf_name] = tts_tasks[task_id]
+                        logging.info("当前 tts_tasks_by_filename 状态：%s", tts_tasks_by_filename)
+                logging.info(f"✅ 成功生成音频: {txt_path.name}")
+            except Exception as e:
+                result = {
+                    "filename": txt_path.name,
+                    "audio_file": None,
+                    "subtitle_file": None,
+                    "status": "failed",
+                    "error": str(e),
+                    "progress": int(idx / total * 100)
+                }
+                # 实时写入全局进度
+                if task_id:
+                    tts_tasks[task_id] = {
+                        "status": "failed",
+                        "error": str(e)
+                    }
+                    logging.info("当前 tts_tasks 状态：%s", tts_tasks)
+            results.append(result)
+            logging.info(f"📤 推送中: {result}")
+            await websocket.send_json(result)
+        # 更新任务状态
+        task_data = task.get("data", {})
+        task_data["tts_generate_selected"] = {
+            "status": "completed",
+            "progress": 100,
+            "results": results
+        }
+        task_manager.update_task(task_id, data=task_data)
+        await websocket.close()
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        await websocket.send_json({"error": str(e)})
+        await websocket.close()
 

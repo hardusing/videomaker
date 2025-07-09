@@ -1,0 +1,65 @@
+# Database Course Script Generation - Requirements
+
+## Course Context
+
+Generate lecture scripts for a database course covering MySQL and Oracle aimed at non-technical learners. The content is specifically about database concepts, SQL operations, database design, and database management - NOT about artificial intelligence, machine learning, or other IT topics. Content will be provided as slides (One page each time) for slide-by-slide script generation.
+
+## Core Output Requirements
+
+- Natural spoken language, approximately 4-5 minutes per slide (target: 800-900 Japanese characters per slide)
+- Concepts explained through relatable analogies and examples
+- Interactive questions with [PAUSE5] pause markers (at least 3 times per slide)
+- Direct emphasis of key points in text
+- Detailed explanation of slide figures/illustrations
+-  Output only Japanese
+
+## Audience Consideration
+
+- Zero technical or IT background
+- No prior database/MySQL/Oracle/SQL knowledge
+- Need for highly accessible explanations
+- Examples should match audience comprehension level
+- Any kinds of brackets are not allowed
+
+## Content Guidelines
+
+- Use complete, natural sentences suitable for audio
+- Avoid:
+  - English words or phrases(Use Katakana instead if possible)
+  - Technical jargon without explanation
+  - Enumerated lists
+  - Parenthetical expressions
+  - Technical jargon without explanation
+  - Q&A sections at chapter ends
+  - Similar expression with previous pages
+  - Talking about the act design of slides
+  - Transitions between chapters
+  - Markdown grammar like highlights etc
+  - Repeating rhetorical techniques (rhetorical questions, interrogative sentences, etc.) that were used in recent pages
+  - Useless filler words like はい, そうですね, etc.
+  - Useless filler words like はい, そうですね, etc.
+- Include:
+  - References to related content from previous chapters
+  - Clear explanations for any new examples
+  - Conversational tone throughout
+  - Direct emphasis of important points
+  - Varied presentation techniques across consecutive slides
+  - Focus exclusively on database topics (MySQL, Oracle, SQL, data management)
+  - Use database-related analogies and examples only
+
+## Process Requirements
+
+- Generate one script per slide
+- Do not merge slide content
+- Match script content to slide content precisely
+- Identify and explain all visual elements
+- Ensure natural flow between slides
+
+## InputFormat
+
+```
+[Previous page scripts]
+...
+[Content of the current page as image format]
+```
+```

@@ -146,7 +146,7 @@ def controlable_text_to_speech_with_subtitle(
                 punct, f'{punct}<break time="{break_time}"/>'
             )
 
-        # 处理不同长度的停顿标记
+        # 处理不同长度的停顿标记 - 完全替换，不保留原始标记
         text_with_all_breaks = text_with_breaks.replace(
             "[PAUSE5]", '<break time="5s"/>'
         )
@@ -156,6 +156,10 @@ def controlable_text_to_speech_with_subtitle(
         text_with_all_breaks = text_with_all_breaks.replace(
             "[PAUSE15]", '<break time="15s"/>'
         )
+        
+        # 额外确保所有PAUSE标记都被处理
+        import re
+        text_with_all_breaks = re.sub(r'\[PAUSE\d+\]', '', text_with_all_breaks)
 
         ssml = f"""
         <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="ja-JP">
