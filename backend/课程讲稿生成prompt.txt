@@ -1,8 +1,8 @@
-# JavaScript Course Script Generation - Requirements
+# Spring Boot Course Script Generation - Requirements
 
 ## Course Context
 
-Generate lecture scripts for a JavaScript course covering JavaScript fundamentals, programming concepts, and web development aimed at non-technical learners. The content is specifically about JavaScript concepts, variables, functions, DOM manipulation, and interactive web features - NOT about artificial intelligence, machine learning, or other unrelated IT topics. Content will be provided as slides (One page each time) for slide-by-slide script generation.
+Generate lecture scripts for a Spring Boot course covering Spring Boot fundamentals, enterprise Java development, and web application frameworks aimed at non-technical learners. The content is specifically about Spring Boot concepts, dependency injection, MVC architecture, REST APIs, and enterprise application development - NOT about artificial intelligence, machine learning, or other unrelated IT topics. Content will be provided as slides (One page each time) for slide-by-slide script generation.
 
 ## Core Output Requirements
 
@@ -16,7 +16,7 @@ Generate lecture scripts for a JavaScript course covering JavaScript fundamental
 ## Audience Consideration
 
 - Zero technical or IT background
-- No prior JavaScript/programming/web development knowledge
+- No prior Spring Boot/Java/enterprise development knowledge
 - Need for highly accessible explanations
 - Examples should match audience comprehension level
 - Any kinds of brackets are not allowed
@@ -44,8 +44,8 @@ Generate lecture scripts for a JavaScript course covering JavaScript fundamental
   - Conversational tone throughout
   - Direct emphasis of important points
   - Varied presentation techniques across consecutive slides
-  - Focus exclusively on JavaScript topics (variables, functions, events, DOM manipulation)
-  - Use JavaScript and programming-related analogies and examples only
+  - Focus exclusively on Spring Boot topics (dependency injection, MVC patterns, REST APIs, annotations)
+  - Use Spring Boot and enterprise development-related analogies and examples only
 
 ## Process Requirements
 
