@@ -9,8 +9,9 @@ import openai
 import tempfile
 import shutil
 import os
-from typing import List
+from typing import List, Dict
 from ..utils.task_manager import task_manager
+from pydantic import BaseModel, Field
 
 router = APIRouter()
 
@@ -186,6 +187,18 @@ async def download_image_zip(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"打包失败: {e}")
 
+class BorderAddResponse(BaseModel):
+    message: str = Field(..., description="处理结果消息")
+    processed_images: List[str] = Field(..., description="已添加边框的图片路径列表")
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "message": "图片已加黑边，共处理 10 张",
+                "processed_images": ["folder_name/1.png", "folder_name/2.png"]
+            }
+        }
+
 def add_black_borders(image_path: Path, output_path: Path, top=100, bottom=100):
     """为图片添加上下黑边"""
     img = Image.open(image_path)
@@ -205,7 +218,28 @@ def process_directory(src_dir: Path, processed: list):
         add_black_borders(src_path, dst_path)
         processed.append(f"{src_dir.name}/{str(rel_path)}")
 
-@router.get("/api/image-notes/add-black-border")
+@router.get(
+    "/api/image-notes/add-black-border",
+    tags=["视频制作工作流程"],
+    summary="步骤3: 为图片添加黑色边框",
+    description="""
+    为步骤2生成的图片添加黑色边框，方便后续添加字幕和处理。
+    
+    输入:
+    - task_id: 从步骤1获得的任务ID (优先使用)
+    - pdf_name: PDF文件名(不含扩展名)，兼容旧版参数
+    
+    处理流程:
+    1. 查找转换后的图片目录
+    2. 为每张图片添加上下黑边
+    3. 保存处理后的图片到processed_images目录
+    
+    返回:
+    - 处理结果消息
+    - 已处理图片的路径列表
+    """,
+    response_model=BorderAddResponse
+)
 async def add_black_border_for_pdf_images(
     task_id: str = Query(None, description="任务ID，推荐优先使用"),
     pdf_name: str = Query(None, description="PDF 文件名，不含扩展名（兼容老参数）")

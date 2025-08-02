@@ -4,8 +4,9 @@ from datetime import datetime
 from fastapi import FastAPI, UploadFile, File, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-from typing import List
+from fastapi.openapi.utils import get_openapi
+from pydantic import BaseModel, Field
+from typing import List, Optional
 # from fastapi_limiter import FastAPILimiter
 # import redis.asyncio as redis
 import redis
@@ -47,7 +48,27 @@ from app.utils.task_manager_memory import task_manager  # 确保导入正确
 
 
 # ✅ 4. 初始化 FastAPI
-app = FastAPI(title="视频制作 API")
+app = FastAPI(
+    title="视频制作 API",
+    description="""
+    # VideoMaker API文档
+    
+    ## 🎬 视频制作工作流程
+    
+    按照以下5个步骤顺序调用API可完成从PPT到视频的完整转换：
+    
+    1. **上传PPT并转换为PDF** - 将PPT文件转换为PDF格式
+    2. **PDF转换为图片** - 将PDF文件转换为图片序列
+    3. **为图片添加黑色边框** - 为图片添加黑色边框以便于后续处理
+    4. **生成文件夹脚本** - 基于图片内容生成讲解脚本
+    5. **生成所有音频** - 将脚本转换为音频文件
+    
+    完成以上步骤后，可以继续调用视频合成API完成最终视频制作。
+    
+    每个API调用都会返回一个task_id，用于关联整个工作流程中的各个步骤。
+    """,
+    version="1.0.0"
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -78,6 +99,47 @@ class Project(BaseModel):
     name: str
     file_path: str
     created_at: datetime
+
+# 自定义OpenAPI文档
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    
+    # 定义工作流程标签，并设置为最优先显示
+    openapi_schema["tags"] = [
+        {
+            "name": "视频制作工作流程",
+            "description": "PPT转视频完整流程API，按顺序调用可完成从PPT到视频的转换",
+            "x-display-order": 1,  # 最高优先级
+        },
+        {
+            "name": "PDF 操作",
+            "description": "PDF文件处理相关接口",
+            "x-display-order": 2,
+        },
+        {
+            "name": "TTS配置",
+            "description": "文本转语音相关接口",
+            "x-display-order": 3,
+        },
+        {
+            "name": "笔记操作",
+            "description": "笔记和文档处理接口",
+            "x-display-order": 4,
+        }
+    ]
+    
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
 
 # ✅ 7. API 路由
 @app.get("/")

@@ -9,7 +9,8 @@ from fastapi.responses import JSONResponse
 from app.utils.base64encoder import encode_image
 from app.utils.pdf2imgs import pdf_to_jpg
 from app.utils.prompt import read_file_as_text
-from typing import List
+from typing import List, Dict
+from pydantic import BaseModel, Field
 import asyncio
 import time
 from app.utils.mysql_config_helper import get_config_value
@@ -408,7 +409,63 @@ async def get_available_folders():
         print(f"[ERROR] 获取文件夹列表失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取文件夹列表失败: {str(e)}")
 
-@router.post("/generate-folder-scripts")
+class FolderScriptsRequest(BaseModel):
+    folder_name: str = Field(..., description="processed_images下的文件夹名称")
+    api_key: str = Field(..., description="API Key，必需")
+    prompt: str = Field(None, description="自定义prompt，可选")
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "folder_name": "presentation",
+                "api_key": "your_api_key_here",
+                "prompt": "请根据幻灯片内容生成清晰、专业的讲解稿"
+            }
+        }
+
+class FolderScriptsResponse(BaseModel):
+    message: str = Field(..., description="处理结果消息")
+    folder_name: str = Field(..., description="处理的文件夹名称")
+    processed_images: int = Field(..., description="处理的图片数量")
+    output_directory: str = Field(..., description="输出目录路径")
+    combined_script_file: str = Field(..., description="合并脚本文件路径")
+    scripts: List[str] = Field(..., description="生成的脚本列表")
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "message": "文稿生成成功",
+                "folder_name": "presentation",
+                "processed_images": 10,
+                "output_directory": "notes_output/presentation",
+                "combined_script_file": "notes_output/presentation/presentation_combined_scripts.txt",
+                "scripts": ["Page 1:\n这是第一页的讲稿...", "Page 2:\n这是第二页的讲稿..."]
+            }
+        }
+
+@router.post(
+    "/generate-folder-scripts",
+    tags=["视频制作工作流程"],
+    summary="步骤4: 生成文件夹脚本",
+    description="""
+    基于图片内容生成讲解脚本。
+    
+    输入:
+    - folder_name: processed_images下的文件夹名称（与步骤3处理的目录相同）
+    - api_key: 用于调用AI生成讲稿的API密钥
+    - prompt: 可选的自定义提示词
+    
+    处理流程:
+    1. 读取处理后的图片
+    2. 使用AI为每张图片生成讲解脚本
+    3. 保存单独和合并的脚本文件
+    
+    返回:
+    - 处理结果及生成的脚本列表
+    - 输出目录和合并脚本文件路径
+    """,
+    response_model=FolderScriptsResponse
+)
 async def generate_folder_scripts(
     folder_name: str = Form(..., description="processed_images下的文件夹名称"),
     api_key: str = Form(..., description="API Key，必需"),

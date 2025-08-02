@@ -16,6 +16,7 @@ import io
 import uuid
 from os.path import abspath
 import comtypes.client
+from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/api/pdf", tags=["PDF 操作"])
 
@@ -26,6 +27,27 @@ IMG_DIR = BASE_DIR / "converted_images"
 
 IMG_DIR.mkdir(parents=True, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# 请求和响应模型
+class PPTConvertResponse(BaseModel):
+    message: str = Field(..., description="处理结果消息")
+    task_id: str = Field(..., description="任务ID，用于后续步骤")
+    original_filename: str = Field(..., description="原始PPT文件名")
+    pdf_filename: str = Field(..., description="转换后的PDF文件名")
+    ppt_size: int = Field(..., description="PPT文件大小(字节)")
+    pdf_size: int = Field(..., description="PDF文件大小(字节)")
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "message": "PPT上传并转换为PDF成功",
+                "task_id": "12345678-1234-5678-1234-567812345678",
+                "original_filename": "presentation.pptx",
+                "pdf_filename": "presentation.pdf",
+                "ppt_size": 1024000,
+                "pdf_size": 512000
+            }
+        }
 
 def ppt_to_pdf(ppt_path, pdf_path):
     """将PPT或PPTX文件转换为PDF"""
@@ -126,7 +148,28 @@ async def delete_uploaded_file(filename: str):
         raise HTTPException(status_code=500, detail=f"删除失败: {e}")
     return {"message": f"{filename} 已删除"}
 
-@router.post("/convert/{task_id}")
+@router.post(
+    "/convert/{task_id}",
+    tags=["视频制作工作流程"],
+    summary="步骤2: 将PDF转换为图片",
+    description="""
+    将步骤1生成的PDF转换为图片序列。
+    
+    输入:
+    - task_id: 从步骤1获得的任务ID
+    
+    处理流程:
+    1. 加载PDF文件
+    2. 将每页PDF转换为高质量PNG图像
+    3. 保存到以PDF文件名为名的子目录中
+    
+    返回:
+    - 图片转换进度和结果的流式响应
+    - 每个转换后的图片路径和缩略图预览
+    - 总页数和处理进度
+    """,
+    response_description="返回流式JSON响应，包含图片路径和转换进度"
+)
 async def convert_pdf_to_images(task_id: str):
     """使用 PyMuPDF 将 PDF 每页转为 PNG，并保存到以 PDF 文件名为名的子目录中，返回图片ID和缩略图"""
     task = task_manager.get_task(task_id)
@@ -389,7 +432,30 @@ async def websocket_convert_pdf(websocket: WebSocket, task_id: str):
     finally:
         await websocket.close()
 
-@router.post("/upload-ppt-convert-pdf")
+@router.post(
+    "/upload-ppt-convert-pdf",
+    tags=["视频制作工作流程"],
+    summary="步骤1: 上传PPT并转换为PDF",
+    description="""
+    上传PPT文件并转换为PDF格式。
+    
+    输入:
+    - file: 上传的PPT或PPTX文件
+    
+    处理流程:
+    1. 上传PPT文件到服务器
+    2. 使用PowerPoint COM对象将PPT转换为PDF
+    3. 保存转换后的PDF文件
+    
+    返回:
+    - task_id: 用于后续步骤的任务ID
+    - pdf_filename: 转换后的PDF文件名
+    - original_filename: 原始PPT文件名
+    - ppt_size: PPT文件大小(字节)
+    - pdf_size: PDF文件大小(字节)
+    """,
+    response_model=PPTConvertResponse
+)
 async def upload_ppt_convert_pdf(file: UploadFile = File(...)) -> Dict[str, Any]:
     """上传PPT文件并转换为PDF"""
     # 支持多种PPT格式

@@ -1,12 +1,12 @@
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi import APIRouter, HTTPException, Query, Body, WebSocket, WebSocketDisconnect,BackgroundTasks
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pathlib import Path
 from app.utils.mysql_config_helper import get_config_value, set_config_value
 import os
 from app.tts.tts_engine import tts, find_txt_files
 from app.utils.task_manager_memory import task_manager
-from typing import Dict
+from typing import Dict, List
 import logging
 import json
 
@@ -32,6 +32,40 @@ class ConfigItem(BaseModel):
 
 class SingleTTSRequest(BaseModel):
     filename: str  # 例如 "lesson01.txt"
+
+class GenerateAudioRequest(BaseModel):
+    task_id: str = Field(None, description="任务ID")
+    filename: str = Field(None, description="文件名/目录名")
+    gender: str = Field("male", description="声音性别：male(男声) 或 female(女声)")
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "task_id": "12345678-1234-5678-1234-567812345678",
+                "gender": "female"
+            }
+        }
+
+class GenerateAudioResponse(BaseModel):
+    audio_files: List[str] = Field(..., description="生成的音频文件列表")
+    subtitle_files: List[str] = Field(..., description="生成的字幕文件列表")
+    results: List[dict] = Field(..., description="详细处理结果")
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "audio_files": ["1.wav", "2.wav"],
+                "subtitle_files": ["1_merged.srt", "2_merged.srt"],
+                "results": [
+                    {
+                        "filename": "1.txt",
+                        "audio_file": "1.wav",
+                        "subtitle_file": "1_merged.srt",
+                        "status": "success"
+                    }
+                ]
+            }
+        }
 
 @router.get("/texts")
 def list_txt_files(
@@ -81,7 +115,31 @@ def set_voice(voice: str = Body(..., embed=True)):
     set_config_value("voice", fixed_voice)
     return {"message": "声音已设置为男生Daichi", "voice": fixed_voice}
 
-@router.post("/generate")
+@router.post(
+    "/generate",
+    tags=["视频制作工作流程"],
+    summary="步骤5: 生成所有音频",
+    description="""
+    将步骤4生成的脚本转换为音频文件。
+    
+    输入:
+    - task_id: 从步骤1获得的任务ID (优先使用)
+    - filename: 文件夹名称 (可选，与task_id二选一)
+    - gender: 声音性别选择，可选值：
+      * male: 男声 (默认)
+      * female: 女声
+    
+    处理流程:
+    1. 读取notes_output目录下的脚本文件
+    2. 使用TTS引擎将文本转换为语音
+    3. 生成对应的字幕文件
+    
+    返回:
+    - 生成的音频和字幕文件列表
+    - 详细的处理结果
+    """,
+    response_model=GenerateAudioResponse
+)
 async def generate_all_audio(
     task_id: str = Query(None, description="任务ID"),
     filename: str = Query(None, description="文件名/目录名"),
