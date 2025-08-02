@@ -114,20 +114,86 @@ backend/
 
 ## 常见问题
 
-1. **Redis连接失败**：
+1. **PowerShell执行策略限制**：
+   如果在Windows系统上使用PowerShell激活虚拟环境时遇到以下错误：
+   ```
+   venv\Scripts\activate : File [...]\Activate.ps1 cannot be loaded because running scripts is disabled on this system.
+   ```
+   
+   **解决方法**：
+   以管理员身份运行PowerShell，并执行以下命令之一：
+   ```powershell
+   # 仅对当前用户更改执行策略（推荐）
+   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+   
+   # 或仅对当前会话更改执行策略
+   Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
+   ```
+   执行后，重新尝试激活虚拟环境。
+
+2. **本地MySQL数据库设置**：
+   如果你需要连接本地MySQL数据库（而不是远程数据库），请按照以下步骤操作：
+   
+   1. 确保本地已安装MySQL服务并启动
+   
+   2. **方法一：使用Python脚本创建数据库（推荐，无需安装MySQL客户端）**：
+      ```bash
+      # 激活虚拟环境后执行
+      cd backend/mysql
+      python setup_database_python.py
+      ```
+      此脚本会直接通过Python创建数据库和表，并自动更新配置文件。
+   
+   3. **方法二：使用自动化脚本创建数据库**：
+      ```bash
+      # Windows系统
+      cd backend/mysql
+      .\setup_database.bat
+      
+      # Linux/Mac系统
+      cd backend/mysql
+      chmod +x setup_database.sh
+      ./setup_database.sh
+      ```
+      这些脚本需要MySQL命令行工具，会自动创建数据库、表，并更新连接配置。
+   
+   4. **方法三：手动创建数据库和表**：
+      ```bash
+      # 进入mysql目录
+      cd backend/mysql
+      
+      # 使用MySQL命令行工具执行初始化脚本
+      mysql -u root -p < create_database.sql
+      
+      # 或者直接在MySQL客户端中执行create_database.sql的内容
+      ```
+      
+   5. 如果你的MySQL用户名或密码不是`root`，请修改`app/utils/mysql_config_helper.py`中的连接参数
+   
+   6. 对于MySQL 8.0及以上版本，需要安装Python的cryptography包以支持caching_sha2_password认证方法：
+      ```bash
+      # 在虚拟环境中安装
+      .\venv\Scripts\pip install cryptography  # Windows
+      venv/bin/pip install cryptography        # Linux/Mac
+      ```
+      如果遇到"RuntimeError: 'cryptography' package is required for sha256_password or caching_sha2_password auth methods"错误，请执行上述命令安装cryptography包。
+   
+   **注意**：默认配置使用的是本地主机(localhost)，端口3306。
+
+3. **Redis连接失败**：
    - 请确保 Redis 服务已启动，且端口映射正确（如用 Docker，需 `-p 6379:6379`）。
    - 代码默认连接 `localhost:6379`，如有变动请在 `task_manager.py` 中调整。
 
-2. **数据库连接错误**：
+4. **数据库连接错误**：
    - MySQL 服务是否运行
    - 数据库配置是否正确
    - 数据库和表是否已创建
 
-3. **文件上传/转换错误**：
+5. **文件上传/转换错误**：
    - 相关目录具有写入权限
    - 磁盘空间充足
 
-4. **依赖问题**：
+6. **依赖问题**：
    - 可用 `pip freeze > requirements.txt` 导出依赖
    - 安装依赖时如遇报错，建议升级 pip 或单独安装缺失包
 

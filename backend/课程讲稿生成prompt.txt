@@ -1,8 +1,8 @@
-# Spring Boot Course Script Generation - Requirements
+# Java Intermediate Course Script Generation - Requirements
 
 ## Course Context
 
-Generate lecture scripts for a Spring Boot course covering Spring Boot fundamentals, enterprise Java development, and web application frameworks aimed at non-technical learners. The content is specifically about Spring Boot concepts, dependency injection, MVC architecture, REST APIs, and enterprise application development - NOT about artificial intelligence, machine learning, or other unrelated IT topics. Content will be provided as slides (One page each time) for slide-by-slide script generation.
+Generate lecture scripts for a Java Intermediate course covering advanced object-oriented programming, exception handling, file IO and stream operations, multithreading, network programming, Lambda expressions and functional programming, Stream API, design patterns and best practices, aimed at non-technical learners. The content is specifically about Java intermediate concepts, not about artificial intelligence, machine learning, or other unrelated IT topics. Content will be provided as slides (One page each time) for slide-by-slide script generation.
 
 ## Core Output Requirements
 
@@ -11,12 +11,12 @@ Generate lecture scripts for a Spring Boot course covering Spring Boot fundament
 - Interactive questions with [PAUSE5] pause markers (at least 3 times per slide)
 - Direct emphasis of key points in text
 - Detailed explanation of slide figures/illustrations
--  Output only Japanese
+- Output only Japanese
 
 ## Audience Consideration
 
 - Zero technical or IT background
-- No prior Spring Boot/Java/enterprise development knowledge
+- No prior Java programming knowledge
 - Need for highly accessible explanations
 - Examples should match audience comprehension level
 - Any kinds of brackets are not allowed
@@ -25,7 +25,7 @@ Generate lecture scripts for a Spring Boot course covering Spring Boot fundament
 
 - Use complete, natural sentences suitable for audio
 - Avoid:
-  - English words or phrases(Use Katakana instead if possible)
+  - English words or phrases (Use Katakana instead if possible)
   - Technical jargon without explanation
   - Enumerated lists
   - Parenthetical expressions
@@ -37,15 +37,14 @@ Generate lecture scripts for a Spring Boot course covering Spring Boot fundament
   - Markdown grammar like highlights etc
   - Repeating rhetorical techniques (rhetorical questions, interrogative sentences, etc.) that were used in recent pages
   - Useless filler words like はい, そうですね, etc.
-  - Useless filler words like はい, そうですね, etc.
 - Include:
   - References to related content from previous chapters
   - Clear explanations for any new examples
   - Conversational tone throughout
   - Direct emphasis of important points
   - Varied presentation techniques across consecutive slides
-  - Focus exclusively on Spring Boot topics (dependency injection, MVC patterns, REST APIs, annotations)
-  - Use Spring Boot and enterprise development-related analogies and examples only
+  - Focus exclusively on Java intermediate topics (Advanced OOP, Exception handling, IO operations, Multithreading, Network programming, Lambda expressions, Stream API, Design patterns, etc.)
+  - Use only analogies and examples related to Java programming
 
 ## Process Requirements
 
@@ -55,7 +54,7 @@ Generate lecture scripts for a Spring Boot course covering Spring Boot fundament
 - Identify and explain all visual elements
 - Ensure natural flow between slides
 
-## InputFormat
+## Input Format
 
 ```
 [Previous page scripts]

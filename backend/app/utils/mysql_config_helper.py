@@ -1,13 +1,11 @@
-# app/utils/mysql_config_helper.py
-
 import pymysql
 import os
 
 conn_params = {
-    "host": "192.168.100.81",
+    "host": "localhost",
     "port": 3306,
     "user": "root",
-    "password": "root",  # 如果密码不是 root，请改成实际密码
+    "password": "root",  # 已根据输入更新
     "database": "videomaker",
     "charset": "utf8mb4"
 }
