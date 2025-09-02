@@ -16,8 +16,9 @@ router = APIRouter(prefix="/api/tts", tags=["TTS配置"])
 
 # 性别与声音的映射
 VOICE_MAPPING = {
-    "male": "ja-JP-DaichiNeural",    # 男声
-    "female": "ja-JP-MayuNeural"    # 女声
+    "male": "ja-JP-DaichiNeural",    # 日语男声
+    "female": "ja-JP-MayuNeural",    # 日语女声
+    "chinese_female": "zh-CN-XiaoxiaoNeural"    # 中文女声
 }
 
 tts_tasks: Dict[str, dict] = {}
@@ -36,13 +37,13 @@ class SingleTTSRequest(BaseModel):
 class GenerateAudioRequest(BaseModel):
     task_id: str = Field(None, description="任务ID")
     filename: str = Field(None, description="文件名/目录名")
-    gender: str = Field("male", description="声音性别：male(男声) 或 female(女声)")
+    gender: str = Field("male", description="声音性别：male(日语男声) 或 female(日语女声) 或 chinese_female(中文女声)")
     
     class Config:
         schema_extra = {
             "example": {
                 "task_id": "12345678-1234-5678-1234-567812345678",
-                "gender": "female"
+                "gender": "chinese_female"
             }
         }
 
@@ -126,8 +127,9 @@ def set_voice(voice: str = Body(..., embed=True)):
     - task_id: 从步骤1获得的任务ID (优先使用)
     - filename: 文件夹名称 (可选，与task_id二选一)
     - gender: 声音性别选择，可选值：
-      * male: 男声 (默认)
-      * female: 女声
+      * male: 日语男声 (默认)
+      * female: 日语女声
+      * chinese_female: 中文女声
     
     处理流程:
     1. 读取notes_output目录下的脚本文件
@@ -143,7 +145,7 @@ def set_voice(voice: str = Body(..., embed=True)):
 async def generate_all_audio(
     task_id: str = Query(None, description="任务ID"),
     filename: str = Query(None, description="文件名/目录名"),
-    gender: str = Query("male", description="声音性别：male(男声) 或 female(女声)")
+    gender: str = Query("male", description="声音性别：male(日语男声) 或 female(日语女声) 或 chinese_female(中文女声)")
 ):
     """
     生成所有音频和字幕，支持task_id和filename双入口。
@@ -152,7 +154,7 @@ async def generate_all_audio(
     """
     # 验证性别参数
     if gender not in VOICE_MAPPING:
-        raise HTTPException(status_code=400, detail="性别参数必须是 'male' 或 'female'")
+        raise HTTPException(status_code=400, detail="性别参数必须是 'male'(日语男声)、'female'(日语女声) 或 'chinese_female'(中文女声)")
     
     # 设置对应的声音
     voice = VOICE_MAPPING[gender]
@@ -548,15 +550,20 @@ def generate_selected_audio(
 def set_gender(gender: str = Body(..., embed=True)):
     """
     设置TTS性别
-    gender: "male" 或 "female"
+    gender: "male"(日语男声)、"female"(日语女声) 或 "chinese_female"(中文女声)
     """
     if gender not in VOICE_MAPPING:
-        raise HTTPException(status_code=400, detail="性别参数必须是 'male' 或 'female'")
+        raise HTTPException(status_code=400, detail="性别参数必须是 'male'(日语男声)、'female'(日语女声) 或 'chinese_female'(中文女声)")
     
     voice = VOICE_MAPPING[gender]
     set_config_value("voice", voice)
     
-    gender_name = "男声" if gender == "male" else "女声"
+    gender_names = {
+        "male": "日语男声",
+        "female": "日语女声", 
+        "chinese_female": "中文女声"
+    }
+    gender_name = gender_names.get(gender, "未知")
     return {
         "message": f"声音已设置为{gender_name}",
         "gender": gender,
@@ -577,7 +584,12 @@ def get_gender():
             gender = g
             break
     
-    gender_name = "男声" if gender == "male" else "女声"
+    gender_names = {
+        "male": "日语男声",
+        "female": "日语女声", 
+        "chinese_female": "中文女声"
+    }
+    gender_name = gender_names.get(gender, "未知")
     return {
         "gender": gender,
         "voice": current_voice,

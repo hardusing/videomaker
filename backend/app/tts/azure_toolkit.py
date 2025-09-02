@@ -161,8 +161,11 @@ def controlable_text_to_speech_with_subtitle(
         import re
         text_with_all_breaks = re.sub(r'\[PAUSE\d+\]', '', text_with_all_breaks)
 
+        # 根据voice判断语言
+        lang = "zh-CN" if "zh-CN" in voice else "ja-JP"
+        
         ssml = f"""
-        <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="ja-JP">
+        <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="{lang}">
             <voice name="{voice}">
                 <prosody rate="{rate}">
                     {text_with_all_breaks}
