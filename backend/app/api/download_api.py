@@ -7,11 +7,14 @@ import uuid
 from fastapi import BackgroundTasks
 import tempfile
 from app.utils.task_manager_memory import task_manager
+import shutil
 
 router = APIRouter()
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 SRT_WAV_DIR = BASE_DIR / "srt_and_wav"
+IMG_DIR = BASE_DIR / "converted_images"
+PROCESSED_IMG_DIR = BASE_DIR / "processed_images"
 ZIP_DIR = BASE_DIR / "temp_zip"
 ZIP_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -170,3 +173,78 @@ async def delete_single_file(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"删除失败: {e}")
     return {"deleted": filename}
+
+@router.get("/api/download/folder-images")
+async def download_folder_images(
+    folder_name: str = Query(..., description="converted_images目录下的文件夹名"),
+    include_black_bordered: bool = Query(False, description="是否包含黑边图片"),
+    background_tasks: BackgroundTasks = None
+):
+    """
+    下载指定文件夹下的所有图片API
+    
+    参数:
+    - folder_name: converted_images目录下的文件夹名
+    - include_black_bordered: 是否包含黑边图片，默认False
+    - background_tasks: 后台任务（用于清理临时文件）
+    
+    返回:
+    - ZIP文件下载
+    """
+    # 确定图片目录
+    img_dir = IMG_DIR / folder_name
+    processed_img_dir = PROCESSED_IMG_DIR / folder_name
+    
+    # 检查目录是否存在
+    if not img_dir.exists() or not img_dir.is_dir():
+        raise HTTPException(status_code=404, detail=f"图片目录不存在: {folder_name}")
+    
+    # 收集图片文件
+    files_to_zip = []
+    
+    # 添加原始图片
+    for img_file in img_dir.glob("*.png"):
+        files_to_zip.append((img_file, f"original/{img_file.name}"))
+    
+    # 如果需要包含黑边图片且目录存在
+    if include_black_bordered and processed_img_dir.exists():
+        for img_file in processed_img_dir.glob("*.png"):
+            files_to_zip.append((img_file, f"black_bordered/{img_file.name}"))
+    
+    if not files_to_zip:
+        raise HTTPException(status_code=404, detail="没有找到可下载的图片文件")
+    
+    # 创建临时ZIP文件
+    tmp_dir = tempfile.mkdtemp()
+    zip_filename = f"{folder_name}_images.zip"
+    zip_path = Path(tmp_dir) / zip_filename
+    
+    try:
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+            for file_path, arcname in files_to_zip:
+                if file_path.exists():
+                    zipf.write(file_path, arcname=arcname)
+        
+        # 设置后台任务清理临时文件
+        def cleanup_temp_files():
+            try:
+                shutil.rmtree(tmp_dir)
+            except Exception as e:
+                print(f"[WARN] 清理临时文件失败：{tmp_dir}，原因：{e}")
+        
+        background_tasks.add_task(cleanup_temp_files)
+        
+        return FileResponse(
+            path=zip_path,
+            filename=zip_filename,
+            media_type="application/zip",
+            background=background_tasks
+        )
+        
+    except Exception as e:
+        # 清理临时文件
+        try:
+            shutil.rmtree(tmp_dir)
+        except:
+            pass
+        raise HTTPException(status_code=500, detail=f"创建ZIP文件失败: {str(e)}")

@@ -33,7 +33,6 @@ const UploadPage: React.FC = () => {
   const [selectedRows, setSelectedRows] = useState<Picture[]>([]);
   const [blackBorderRefreshKey, setBlackBorderRefreshKey] = useState(Date.now());
   const picturesRef = React.useRef<HTMLDivElement>(null);
-  const [currentStep, setCurrentStep] = useState(0);
   const [searchText, setSearchText] = useState("");
   const [filteredProjects, setFilteredProjects] = useState<PPTFile[]>([]);
 
@@ -389,10 +388,28 @@ const UploadPage: React.FC = () => {
     });
   };
 
-  const handleDownloadAll = () => {
-    pictures.forEach(pic => {
-      handleDownloadImage(pic.url, pic.name, pic.page);
-    });
+  const handleDownloadAll = async () => {
+    if (!selectedPpt) {
+      message.error("PPTが選択されていません");
+      return;
+    }
+    
+    try {
+      // 获取PPT名称（去掉扩展名）
+      const pptName = selectedPpt.replace(/\.ppt$/i, "").replace(/\.pptx$/i, "");
+      
+      // 使用新的API下载文件夹中的所有图片
+      const downloadUrl = `http://localhost:8000/api/download/folder-images?folder_name=${encodeURIComponent(pptName)}`;
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = `${pptName}_images.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      message.success("画像ダウンロード開始");
+    } catch (error) {
+      message.error("画像ダウンロード失敗");
+    }
   };
 
 // 全部削除
@@ -459,15 +476,6 @@ const handleBatchDeleteAll = async () => {
 
   return (
     <div style={{ padding: 24 }}>
-      <Steps
-        current={currentStep}
-        items={[
-          { title: "PPT上传" },
-          { title: "写真生成" },
-          { title: "写真下载" },
-        ]}
-        style={{ marginBottom: 32, maxWidth: 600 }}
-      />
       <Upload {...uploadProps} showUploadList={false}>
         <Button icon={<UploadOutlined />}>PPTをアップロード</Button>
       </Upload>
