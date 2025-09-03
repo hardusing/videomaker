@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { Table, Button, Upload, message, Popconfirm, Modal, Steps } from "antd";
+import { Table, Button, Upload, message, Popconfirm, Modal, Steps, Input } from "antd";
 import {
   UploadOutlined,
   DeleteOutlined,
   DownloadOutlined,
+  SearchOutlined,
 } from "@ant-design/icons";
 import type { UploadProps } from "antd";
 import axios from "axios";
@@ -33,6 +34,8 @@ const UploadPage: React.FC = () => {
   const [blackBorderRefreshKey, setBlackBorderRefreshKey] = useState(Date.now());
   const picturesRef = React.useRef<HTMLDivElement>(null);
   const [currentStep, setCurrentStep] = useState(0);
+  const [searchText, setSearchText] = useState("");
+  const [filteredProjects, setFilteredProjects] = useState<PPTFile[]>([]);
 
   // PPT一覧を取得
   const fetchProjects = async () => {
@@ -56,11 +59,12 @@ const UploadPage: React.FC = () => {
             map[filename] = item.task_id;
           }
         });
-      }
-      setProjects(files);
-      if (Object.keys(map).length > 0) {
-        setPptTaskMap(map);
-      }
+              }
+        setProjects(files);
+        setFilteredProjects(files);
+        if (Object.keys(map).length > 0) {
+          setPptTaskMap(map);
+        }
          } catch (error) {
        message.error("PPT取得失敗");
      }
@@ -73,6 +77,18 @@ const UploadPage: React.FC = () => {
     }
     fetchProjects();
   }, []);
+
+  // 搜索功能
+  useEffect(() => {
+    if (searchText.trim() === "") {
+      setFilteredProjects(projects);
+    } else {
+      const filtered = projects.filter(project =>
+        project.name.toLowerCase().includes(searchText.toLowerCase())
+      );
+      setFilteredProjects(filtered);
+    }
+  }, [searchText, projects]);
 
   // PPTアップロード
   const uploadProps: UploadProps = {
@@ -467,9 +483,24 @@ const handleBatchDeleteAll = async () => {
         }}
       >
         <div style={{ marginTop: 32 }}>
-          <h2 style={{ marginBottom: 24, letterSpacing: 2 }}>
-            PPT一覧
-          </h2>
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 24
+          }}>
+            <h2 style={{ margin: 0, letterSpacing: 2 }}>
+              PPT一覧
+            </h2>
+            <Input
+              placeholder="PPT名称で検索..."
+              prefix={<SearchOutlined />}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              style={{ width: 300 }}
+              allowClear
+            />
+          </div>
           <Table
             style={{
               borderRadius: 8,
@@ -477,9 +508,16 @@ const handleBatchDeleteAll = async () => {
               boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
             }}
             columns={pptColumns}
-            dataSource={projects}
+            dataSource={filteredProjects}
             rowKey="name"
-            pagination={false}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (total, range) =>
+                `${range[0]}-${range[1]} / ${total}件`,
+              pageSizeOptions: ['5', '10', '20', '50'],
+            }}
           />
         </div>
       </div>
