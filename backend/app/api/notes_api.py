@@ -27,7 +27,7 @@ router.include_router(APIRouter(prefix="/api/script", tags=["脚本生成"]))
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 NOTES_DIR = BASE_DIR / "notes_output"
-PROCESSED_IMAGES_DIR = Path("./processed_images")
+PROCESSED_IMAGES_DIR = BASE_DIR / "processed_images"
 PROCESSED_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
 MAX_BASE64_LENGTH = 3000  # 控制图片base64内容最大长度，防止token超限
@@ -70,6 +70,40 @@ async def list_all_txt_files(
     else:
         txt_files = [str(file.relative_to(NOTES_DIR)) for file in NOTES_DIR.rglob("*.txt")]
     return {"files": txt_files}
+
+@router.get("/notes-folders")
+async def get_notes_folders():
+    """
+    获取 notes_output 目录下所有文件夹列表
+    """
+    try:
+        folders = []
+        print(f"[LOG] 正在扫描notes_output目录: {NOTES_DIR}")
+        
+        if not NOTES_DIR.exists():
+            print(f"[WARNING] notes_output目录不存在: {NOTES_DIR}")
+            return {"folders": []}
+            
+        for item in NOTES_DIR.iterdir():
+            if item.is_dir():
+                print(f"[LOG] 检查notes目录: {item.name}")
+                # 直接添加所有文件夹，不检查是否包含txt文件
+                folders.append({
+                    "name": item.name,
+                    "path": str(item.relative_to(NOTES_DIR))
+                })
+                print(f"[LOG] 添加notes文件夹: {item.name}")
+        
+        # 按文件夹名称排序
+        folders.sort(key=lambda x: x["name"])
+        
+        print(f"[LOG] 找到notes文件夹: {len(folders)} 个")
+        return {"folders": folders}
+    except Exception as e:
+        print(f"[ERROR] 获取notes文件夹列表失败: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"获取notes文件夹列表失败: {str(e)}")
 
 @router.get("/{filename}")
 async def get_txt_file_content(
@@ -391,22 +425,32 @@ async def get_available_folders():
     """
     try:
         folders = []
-        if PROCESSED_IMAGES_DIR.exists():
-            for item in PROCESSED_IMAGES_DIR.iterdir():
-                if item.is_dir():
-                    # 检查文件夹中是否有图片文件
-                    has_images = any(
-                        item.glob(pattern) for pattern in ["*.jpg", "*.jpeg", "*.png"]
-                    )
-                    if has_images:
-                        folders.append({
-                            "name": item.name,
-                            "path": str(item.relative_to(PROCESSED_IMAGES_DIR))
-                        })
+        print(f"[LOG] 正在扫描目录: {PROCESSED_IMAGES_DIR}")
+        
+        if not PROCESSED_IMAGES_DIR.exists():
+            print(f"[WARNING] 目录不存在: {PROCESSED_IMAGES_DIR}")
+            return {"folders": []}
+            
+        for item in PROCESSED_IMAGES_DIR.iterdir():
+            if item.is_dir():
+                print(f"[LOG] 检查目录: {item.name}")
+                # 检查文件夹中是否有图片文件
+                has_images = any(
+                    item.glob(pattern) for pattern in ["*.jpg", "*.jpeg", "*.png"]
+                )
+                if has_images:
+                    folders.append({
+                        "name": item.name,
+                        "path": str(item.relative_to(PROCESSED_IMAGES_DIR))
+                    })
+                    print(f"[LOG] 添加文件夹: {item.name}")
+        
         print(f"[LOG] 找到可用文件夹: {len(folders)} 个")
         return {"folders": folders}
     except Exception as e:
         print(f"[ERROR] 获取文件夹列表失败: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"获取文件夹列表失败: {str(e)}")
 
 class FolderScriptsRequest(BaseModel):

@@ -333,10 +333,11 @@ async def list_images(
 @router.get("/api/image-notes/black-bordered-images")
 async def list_black_bordered_images(
     task_id: str = Query(None, description="任务ID，推荐优先使用"),
-    pdf_name: str = Query(None, description="PDF 文件名（不含扩展名），兼容老参数")
+    pdf_name: str = Query(None, description="PDF 文件名（不含扩展名），兼容老参数"),
+    dir_name: str = Query(None, description="目录名")
 ):
     """
-    获取 processed_images 目录下所有加黑边图片文件名；支持 task_id 或 pdf_name
+    获取 processed_images 目录下所有加黑边图片文件名；支持 task_id、pdf_name 或 dir_name
     """
     image_list: List[str] = []
     target_dir = None
@@ -359,6 +360,8 @@ async def list_black_bordered_images(
         target_dir = PROCESSED_IMG_DIR / pdf_name
     elif pdf_name:
         target_dir = PROCESSED_IMG_DIR / pdf_name
+    elif dir_name:
+        target_dir = PROCESSED_IMG_DIR / dir_name
     if target_dir:
         if target_dir.exists() and target_dir.is_dir():
             image_list = [f"{target_dir.name}/{f.name}" for f in target_dir.glob("*.png")]

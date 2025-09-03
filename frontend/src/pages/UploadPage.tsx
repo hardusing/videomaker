@@ -14,17 +14,17 @@ interface Picture {
   page: number;
 }
 
-interface PDFFile {
+interface PPTFile {
   name: string;
   created_at: string;
 }
 
 const UploadPage: React.FC = () => {
-  const [projects, setProjects] = useState<PDFFile[]>([]);
+  const [projects, setProjects] = useState<PPTFile[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedPdf, setSelectedPdf] = useState<string | null>(null);
+  const [selectedPpt, setSelectedPpt] = useState<string | null>(null);
   const [pictures, setPictures] = useState<Picture[]>([]);
-  const [pdfTaskMap, setPdfTaskMap] = useState<{ [pdfName: string]: string }>({});
+  const [pptTaskMap, setPptTaskMap] = useState<{ [pptName: string]: string }>({});
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewImages, setPreviewImages] = useState<Picture[]>([]);
@@ -34,84 +34,82 @@ const UploadPage: React.FC = () => {
   const picturesRef = React.useRef<HTMLDivElement>(null);
   const [currentStep, setCurrentStep] = useState(0);
 
-  // PDF一覧を取得
+  // PPT一覧を取得
   const fetchProjects = async () => {
     try {
       const response = await axios.get(
-        "http://localhost:8000/api/pdf/upload/list"
+        "http://localhost:8000/api/pdf/ppt-uploads/list"
       );
-      // 兼容老格式和新格式
+      // 处理PPT上传列表数据
       let files: any[] = [];
-      let map: { [pdfName: string]: string } = {};
-      if (Array.isArray(response.data) && response.data.length > 0 && typeof response.data[0] === "object") {
-        // 新格式 [{name, task_id}]
+      let map: { [pptName: string]: string } = {};
+      
+      if (Array.isArray(response.data) && response.data.length > 0) {
+        // 后端返回格式: [{task_id, original_filename, pdf_filename, status, ...}]
         files = response.data.map((item: any) => ({
-          name: item.name || item.filename, // 兼容 filename 字段
-          created_at: "",
+          name: item.original_filename || item.name || "",
+          created_at: item.created_at || "",
         }));
         response.data.forEach((item: any) => {
-          map[item.name || item.filename] = item.task_id;
+          const filename = item.original_filename || item.name || "";
+          if (filename) {
+            map[filename] = item.task_id;
+          }
         });
-      } else {
-        // 老格式 [filename, ...]
-        files = response.data.map((filename: string) => ({
-          name: filename,
-          created_at: "",
-        }));
       }
       setProjects(files);
       if (Object.keys(map).length > 0) {
-        setPdfTaskMap(map);
+        setPptTaskMap(map);
       }
-    } catch (error) {
-      message.error("PDF取得失敗");
-    }
+         } catch (error) {
+       message.error("PPT取得失敗");
+     }
   };
 
   useEffect(() => {
-    const last = localStorage.getItem("lastSelectedPdf");
+    const last = localStorage.getItem("lastSelectedPpt");
     if (last) {
-      setSelectedPdf(last);
+      setSelectedPpt(last);
     }
     fetchProjects();
   }, []);
 
-  // PDFアップロード
+  // PPTアップロード
   const uploadProps: UploadProps = {
     name: "file",
-    action: "http://localhost:8000/api/pdf/upload",
-    accept: ".pdf",
+    action: "http://localhost:8000/api/pdf/upload-ppt-convert-pdf",
+    accept: ".ppt,.pptx",
     onChange(info) {
       if (info.file.status === "done") {
-        message.success(`${info.file.name} PDFアップロード成功`);
+        message.success(`${info.file.name} PPTアップロード成功`);
         fetchProjects();
         const taskId = info.file.response?.task_id;
         if (taskId) {
-          setPdfTaskMap(prev => ({ ...prev, [info.file.name]: taskId }));
+          setPptTaskMap(prev => ({ ...prev, [info.file.name]: taskId }));
           setSelectedTaskId(taskId);
-          setSelectedPdf(info.file.name);
+          setSelectedPpt(info.file.name);
         }
       } else if (info.file.status === "error") {
-        message.error(`${info.file.name} PDFアップロード失敗`);
+        message.error(`${info.file.name} PPTアップロード失敗`);
       }
     },
   };
 
-  // PDFから画像生成
-  const handleConvert = async (pdfName: string) => {
-    const taskId = pdfTaskMap[pdfName];
+  // PPTから画像生成
+  const handleConvert = async (pptName: string) => {
+    const taskId = pptTaskMap[pptName];
     if (!taskId) {
-      message.error("タスクIDがありません。PDFをアップロードしてください。");
+      message.error("タスクIDがありません。PPTをアップロードしてください。");
       return;
     }
 
     // 1. 生成前清空本地缓存和 state
     setPictures([]);
-    localStorage.removeItem(`pictures_${pdfName}`);
+    localStorage.removeItem(`pictures_${pptName}`);
 
     try {
       setLoading(true);
-      setSelectedPdf(pdfName);
+      setSelectedPpt(pptName);
       setSelectedTaskId(taskId);
 
       // 2. 发送生成请求（流式接口，不处理流内容，只等返回即可）
@@ -128,7 +126,7 @@ const UploadPage: React.FC = () => {
         page: index + 1,
       }));
       setPictures(pictureList);
-      localStorage.setItem(`pictures_${pdfName}`, JSON.stringify(pictureList));
+      localStorage.setItem(`pictures_${pptName}`, JSON.stringify(pictureList));
       message.success("写真生成成功");
     } catch (error) {
       message.error("写真生成失敗");
@@ -137,25 +135,31 @@ const UploadPage: React.FC = () => {
     }
   };
 
-  // PDF削除
-  const handleDeletePdf = async (pdfName: string) => {
+  // PPT削除
+  const handleDeletePpt = async (pptName: string) => {
     try {
-      await axios.delete(`http://localhost:8000/api/pdf/upload/delete/${pdfName}`);
-      message.success("PDF削除成功");
+      // 根据文件名找到对应的task_id
+      const taskId = pptTaskMap[pptName];
+      if (!taskId) {
+        message.error("找不到对应的任务ID");
+        return;
+      }
+      await axios.delete(`http://localhost:8000/api/pdf/ppt-uploads/delete/${taskId}`);
+      message.success("PPT削除成功");
       fetchProjects();
       setPictures([]);
-      localStorage.removeItem(`pictures_${pdfName}`);
-      if (selectedPdf === pdfName) {
-        setSelectedPdf(null);
+      localStorage.removeItem(`pictures_${pptName}`);
+      if (selectedPpt === pptName) {
+        setSelectedPpt(null);
         setSelectedTaskId(null);
       }
-      setPdfTaskMap(prev => {
+      setPptTaskMap(prev => {
         const newMap = { ...prev };
-        delete newMap[pdfName];
+        delete newMap[pptName];
         return newMap;
       });
     } catch (error) {
-      message.error("PDF削除失敗");
+      message.error("PPT削除失敗");
     }
   };
 
@@ -163,11 +167,11 @@ const UploadPage: React.FC = () => {
   const handleDeleteImage = async (imagePath: string) => {
     try {
       // imagePath 形如 "1(1)/1.png"
-      const pdfName = selectedPdf?.replace(/\.pdf$/i, "");
+      const pptName = selectedPpt?.replace(/\.ppt$/i, "").replace(/\.pptx$/i, "");
       const imageId = imagePath.split("/").pop()?.replace(/\.png$/i, "");
       await axios.delete("http://localhost:8000/api/image-notes/image", {
         params: {
-          task_id: pdfTaskMap[selectedPdf!], // 或 selectedTaskId
+          task_id: pptTaskMap[selectedPpt!], // 或 selectedTaskId
           black_bordered: false, // 删除黑边图片时传 true
         },
         data: {
@@ -176,10 +180,10 @@ const UploadPage: React.FC = () => {
       });
       message.success("画像削除成功");
       // 前端同步移除
-      const newPictures = pictures.filter((pic) => `${pdfName}/${pic.name}` !== imagePath);
+      const newPictures = pictures.filter((pic) => `${pptName}/${pic.name}` !== imagePath);
       setPictures(newPictures);
-      if (selectedPdf) {
-        localStorage.setItem(`pictures_${selectedPdf}`, JSON.stringify(newPictures));
+      if (selectedPpt) {
+        localStorage.setItem(`pictures_${selectedPpt}`, JSON.stringify(newPictures));
       }
     } catch (error) {
       console.error(error);
@@ -193,9 +197,9 @@ const UploadPage: React.FC = () => {
       const response = await fetch(url);
       const blob = await response.blob();
       const link = document.createElement("a");
-      // 使用PDF名字+页码命名
-      const pdfNameWithoutExt = selectedPdf?.replace(/\.pdf$/i, "") || "";
-      const newFileName = `${pdfNameWithoutExt}_${page}.png`;
+      // 使用PPT名字+页码命名
+      const pptNameWithoutExt = selectedPpt?.replace(/\.ppt$/i, "").replace(/\.pptx$/i, "") || "";
+      const newFileName = `${pptNameWithoutExt}_${page}.png`;
 
       link.download = newFileName;
       link.href = window.URL.createObjectURL(blob);
@@ -208,14 +212,14 @@ const UploadPage: React.FC = () => {
 
   // 黒枠追加
   const handleAddBlackBorder = async () => {
-    if (!selectedPdf) {
-      message.warning("PDFを選択してください");
+    if (!selectedPpt) {
+      message.warning("PPTを選択してください");
       return;
     }
-    const pdfName = selectedPdf.replace(/\.pdf$/i, "");
+    const pptName = selectedPpt.replace(/\.ppt$/i, "").replace(/\.pptx$/i, "");
     try {
       await axios.get("http://localhost:8000/api/image-notes/add-black-border", {
-        params: { pdf_name: pdfName }
+        params: { pdf_name: pptName }
       });
       message.success("黒枠追加成功");
       window.location.reload(); // 黑边生成后强制刷新页面
@@ -224,12 +228,12 @@ const UploadPage: React.FC = () => {
     }
   };
 
-  const handleShowPictures = (pdfName: string) => {
-    const cached = localStorage.getItem(`pictures_${pdfName}`);
+  const handleShowPictures = (pptName: string) => {
+    const cached = localStorage.getItem(`pictures_${pptName}`);
     if (cached) {
       setPictures(JSON.parse(cached));
-      setSelectedPdf(pdfName);
-      localStorage.setItem("lastSelectedPdf", pdfName);
+      setSelectedPpt(pptName);
+      localStorage.setItem("lastSelectedPpt", pptName);
       if (picturesRef.current) {
         picturesRef.current.scrollIntoView({ behavior: "smooth" });
       }
@@ -239,9 +243,9 @@ const UploadPage: React.FC = () => {
     }
   };
 
-  const pdfColumns = [
+  const pptColumns = [
     {
-      title: "PDF名称",
+      title: "PPT名称",
       dataIndex: "name",
       key: "name",
     },
@@ -264,12 +268,12 @@ const UploadPage: React.FC = () => {
         }
         return (
           <>
-            <Button
-              type="primary"
-              onClick={() => handleConvert(record.name)}
-              loading={loading && selectedPdf === record.name}
-              style={{ marginRight: 8 }}
-            >
+                         <Button
+               type="primary"
+               onClick={() => handleConvert(record.name)}
+               loading={loading && selectedPpt === record.name}
+               style={{ marginRight: 8 }}
+             >
               写真生成
             </Button>
             <Button
@@ -280,8 +284,8 @@ const UploadPage: React.FC = () => {
               写真一览
             </Button>
             <Popconfirm
-              title="このPDFを削除しますか？"
-              onConfirm={() => handleDeletePdf(record.name)}
+              title="このPPTを削除しますか？"
+              onConfirm={() => handleDeletePpt(record.name)}
               okText="はい"
               cancelText="いいえ"
             >
@@ -319,12 +323,12 @@ const UploadPage: React.FC = () => {
       ),
     },
     {
-      title: "黒枠画像",
-      key: "blackBordered",
-      render: (_: any, record: Picture) => {
-        if (!selectedPdf) return null;
-        const pdfName = selectedPdf.replace(/\.pdf$/i, "");
-        const blackUrl = `http://localhost:8000/processed_images/${pdfName}/${record.name}?t=${blackBorderRefreshKey}`;
+             title: "黒枠画像",
+       key: "blackBordered",
+       render: (_: any, record: Picture) => {
+         if (!selectedPpt) return null;
+         const pptName = selectedPpt.replace(/\.ppt$/i, "").replace(/\.pptx$/i, "");
+         const blackUrl = `http://localhost:8000/processed_images/${pptName}/${record.name}?t=${blackBorderRefreshKey}`;
         return (
           <img
             src={blackUrl}
@@ -343,8 +347,8 @@ const UploadPage: React.FC = () => {
   ];
 
   useEffect(() => {
-    if (selectedPdf) {
-      const saved = localStorage.getItem(`pictures_${selectedPdf}`);
+    if (selectedPpt) {
+      const saved = localStorage.getItem(`pictures_${selectedPpt}`);
       if (saved) {
         setPictures(JSON.parse(saved));
       } else {
@@ -353,7 +357,7 @@ const UploadPage: React.FC = () => {
     } else {
       setPictures([]);
     }
-  }, [selectedPdf]);
+  }, [selectedPpt]);
 
   const rowSelection = {
     selectedRowKeys,
@@ -377,10 +381,10 @@ const UploadPage: React.FC = () => {
 
 // 全部削除
 const handleBatchDeleteAll = async () => {
-  if (!selectedPdf || pictures.length === 0) return;
+  if (!selectedPpt || pictures.length === 0) return;
 
-  const pdfName = selectedPdf.replace(/\.pdf$/i, "");
-  const taskId = pdfTaskMap[selectedPdf];
+  const pptName = selectedPpt.replace(/\.ppt$/i, "").replace(/\.pptx$/i, "");
+  const taskId = pptTaskMap[selectedPpt];
   const imageIds = pictures.map(pic => pic.name.replace(/\.png$/i, ""));
 
   try {
@@ -398,58 +402,58 @@ const handleBatchDeleteAll = async () => {
     setPictures([]);
     setSelectedRowKeys([]);
     setSelectedRows([]);
-    localStorage.removeItem(`pictures_${selectedPdf}`);
-  } catch (error) {
-    console.error(error);
-    message.error("画像削除に失敗しました");
-  }
-};
+         localStorage.removeItem(`pictures_${selectedPpt}`);
+   } catch (error) {
+     console.error(error);
+     message.error("画像削除に失敗しました");
+   }
+ };
 
-  const handleBatchDelete = async () => {
-    if (!selectedPdf || selectedRows.length === 0) return;
-    const pdfName = selectedPdf.replace(/\.pdf$/i, "");
-    const taskId = pdfTaskMap[selectedPdf];
-    const imageIds = selectedRows.map(pic => pic.name.replace(/\.png$/i, "")); // 去掉扩展名
+     const handleBatchDelete = async () => {
+     if (!selectedPpt || selectedRows.length === 0) return;
+     const pptName = selectedPpt.replace(/\.ppt$/i, "").replace(/\.pptx$/i, "");
+     const taskId = pptTaskMap[selectedPpt];
+     const imageIds = selectedRows.map(pic => pic.name.replace(/\.png$/i, "")); // 去掉扩展名
 
-    try {
-      await axios.delete("http://localhost:8000/api/image-notes/image", {
-        params: {
-          task_id: taskId,
-          black_bordered: false,
-        },
-        data: {
-          image_ids: imageIds,
-        },
-      });
-      message.success("画像削除成功");
-      // 前端同步移除
-      const newPictures = pictures.filter(
-        (pic) => !imageIds.includes(pic.name.replace(/\.png$/i, ""))
-      );
-      setPictures(newPictures);
-      setSelectedRowKeys([]);
-      setSelectedRows([]);
-      if (selectedPdf) {
-        localStorage.setItem(`pictures_${selectedPdf}`, JSON.stringify(newPictures));
-      }
-    } catch (error) {
-      message.error("画像削除失敗");
-    }
-  };
+     try {
+       await axios.delete("http://localhost:8000/api/image-notes/image", {
+         params: {
+           task_id: taskId,
+           black_bordered: false,
+         },
+         data: {
+           image_ids: imageIds,
+         },
+       });
+       message.success("画像削除成功");
+       // 前端同步移除
+       const newPictures = pictures.filter(
+         (pic) => !imageIds.includes(pic.name.replace(/\.png$/i, ""))
+       );
+       setPictures(newPictures);
+       setSelectedRowKeys([]);
+       setSelectedRows([]);
+       if (selectedPpt) {
+         localStorage.setItem(`pictures_${selectedPpt}`, JSON.stringify(newPictures));
+       }
+     } catch (error) {
+       message.error("画像削除失敗");
+     }
+   };
 
   return (
     <div style={{ padding: 24 }}>
       <Steps
         current={currentStep}
         items={[
-          { title: "PDF上传" },
+          { title: "PPT上传" },
           { title: "写真生成" },
           { title: "写真下载" },
         ]}
         style={{ marginBottom: 32, maxWidth: 600 }}
       />
       <Upload {...uploadProps} showUploadList={false}>
-        <Button icon={<UploadOutlined />}>PDFをアップロード</Button>
+        <Button icon={<UploadOutlined />}>PPTをアップロード</Button>
       </Upload>
 
       <div
@@ -464,7 +468,7 @@ const handleBatchDeleteAll = async () => {
       >
         <div style={{ marginTop: 32 }}>
           <h2 style={{ marginBottom: 24, letterSpacing: 2 }}>
-            PDF一覧
+            PPT一覧
           </h2>
           <Table
             style={{
@@ -472,7 +476,7 @@ const handleBatchDeleteAll = async () => {
               background: "#fff",
               boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
             }}
-            columns={pdfColumns}
+            columns={pptColumns}
             dataSource={projects}
             rowKey="name"
             pagination={false}
@@ -520,10 +524,10 @@ const handleBatchDeleteAll = async () => {
             >
               全ての写真を削除
             </Button>
-            <Button
-              onClick={handleAddBlackBorder}
-              disabled={!selectedPdf}
-            >
+                         <Button
+               onClick={handleAddBlackBorder}
+               disabled={!selectedPpt}
+             >
               黒枠追加
             </Button>
           <Table

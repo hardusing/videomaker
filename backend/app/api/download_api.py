@@ -19,6 +19,7 @@ ZIP_DIR.mkdir(parents=True, exist_ok=True)
 async def download_all_srt_and_wav(
     task_id: str = Query(None, description="任务ID"),
     file: str = Query(None, description="文件名/目录名"),
+    dir_name: str = Query(None, description="目录名"),
     background_tasks: BackgroundTasks = None
 ):
     pdf_name = None
@@ -36,8 +37,10 @@ async def download_all_srt_and_wav(
             raise HTTPException(status_code=400, detail="不支持的任务类型")
     elif file:
         pdf_name = file
+    elif dir_name:
+        pdf_name = dir_name
     else:
-        raise HTTPException(status_code=400, detail="请提供task_id或file参数")
+        raise HTTPException(status_code=400, detail="请提供task_id、file或dir_name参数")
     task_dir = SRT_WAV_DIR / pdf_name
     if not task_dir.exists() or not task_dir.is_dir():
         raise HTTPException(status_code=404, detail="任务音频目录不存在")
@@ -67,7 +70,8 @@ async def download_all_srt_and_wav(
 @router.get("/api/files/list", response_model=List[str])
 async def list_all_files(
     task_id: str = Query(None, description="任务ID"),
-    file: str = Query(None, description="文件名/目录名")
+    file: str = Query(None, description="文件名/目录名"),
+    dir_name: str = Query(None, description="目录名")
 ):
     pdf_name = None
     if task_id:
@@ -84,8 +88,10 @@ async def list_all_files(
             raise HTTPException(status_code=400, detail="不支持的任务类型")
     elif file:
         pdf_name = file
+    elif dir_name:
+        pdf_name = dir_name
     else:
-        raise HTTPException(status_code=400, detail="请提供task_id或file参数")
+        raise HTTPException(status_code=400, detail="请提供task_id、file或dir_name参数")
     task_dir = SRT_WAV_DIR / pdf_name
     if not task_dir.exists() or not task_dir.is_dir():
         raise HTTPException(status_code=404, detail="目录不存在")
@@ -95,7 +101,8 @@ async def list_all_files(
 @router.delete("/api/files/clear")
 async def delete_all_files(
     task_id: str = Query(None, description="任务ID"),
-    file: str = Query(None, description="文件名/目录名")
+    file: str = Query(None, description="文件名/目录名"),
+    dir_name: str = Query(None, description="目录名")
 ):
     pdf_name = None
     if task_id:
@@ -112,8 +119,10 @@ async def delete_all_files(
             raise HTTPException(status_code=400, detail="不支持的任务类型")
     elif file:
         pdf_name = file
+    elif dir_name:
+        pdf_name = dir_name
     else:
-        raise HTTPException(status_code=400, detail="请提供task_id或file参数")
+        raise HTTPException(status_code=400, detail="请提供task_id、file或dir_name参数")
     task_dir = SRT_WAV_DIR / pdf_name
     if not task_dir.exists() or not task_dir.is_dir():
         raise HTTPException(status_code=404, detail="目录不存在")
@@ -131,7 +140,8 @@ async def delete_all_files(
 async def delete_single_file(
     filename: str,
     task_id: str = Query(None, description="任务ID"),
-    file: str = Query(None, description="文件名/目录名")
+    file: str = Query(None, description="文件名/目录名"),
+    dir_name: str = Query(None, description="目录名")
 ):
     pdf_name = None
     if task_id:
@@ -148,8 +158,10 @@ async def delete_single_file(
             raise HTTPException(status_code=400, detail="不支持的任务类型")
     elif file:
         pdf_name = file
+    elif dir_name:
+        pdf_name = dir_name
     else:
-        raise HTTPException(status_code=400, detail="请提供task_id或file参数")
+        raise HTTPException(status_code=400, detail="请提供task_id、file或dir_name参数")
     target_file = SRT_WAV_DIR / pdf_name / filename
     if not target_file.exists() or not target_file.is_file():
         raise HTTPException(status_code=404, detail="文件不存在")
