@@ -7,16 +7,12 @@ const Navbar: React.FC = () => {
 
   const items = [
     {
-      key: '/',
-      label: <Link to="/">PPT笔记提取</Link>,
-    },
-    {
-        key: '/tts',
-        label: <Link to="/tts">文本转音频</Link>,  
+        key: '/',
+        label: <Link to="/">テキスト音声変換</Link>,  
       },
     {
         key: '/videos',
-        label: <Link to="/videos">视频转码</Link>,  
+        label: <Link to="/videos">動画変換</Link>,  
       }
       ,
     {

@@ -1,8 +1,8 @@
-# Java Intermediate Course Script Generation - Requirements
+# Spring Boot Practical Course Script Generation - Requirements
 
 ## Course Context
 
-Generate lecture scripts for a Java Intermediate course covering advanced object-oriented programming, exception handling, file IO and stream operations, multithreading, network programming, Lambda expressions and functional programming, Stream API, design patterns and best practices, aimed at non-technical learners. The content is specifically about Java intermediate concepts, not about artificial intelligence, machine learning, or other unrelated IT topics. Content will be provided as slides (One page each time) for slide-by-slide script generation.
+Generate lecture scripts for a Spring Boot practical course covering basic concepts, project initialization, environment setup, dependency management, configuration files, controller development, database integration, RESTful API design, security authentication, deployment and operations, aimed at non-technical learners. The content is specifically about Spring Boot practical application development, not about artificial intelligence, machine learning, or other unrelated IT topics. Content will be provided as slides (One page each time) for slide-by-slide script generation.
 
 ## Core Output Requirements
 
@@ -16,7 +16,7 @@ Generate lecture scripts for a Java Intermediate course covering advanced object
 ## Audience Consideration
 
 - Zero technical or IT background
-- No prior Java programming knowledge
+- No prior Spring Boot programming knowledge
 - Need for highly accessible explanations
 - Examples should match audience comprehension level
 - Any kinds of brackets are not allowed
@@ -29,7 +29,6 @@ Generate lecture scripts for a Java Intermediate course covering advanced object
   - Technical jargon without explanation
   - Enumerated lists
   - Parenthetical expressions
-  - Technical jargon without explanation
   - Q&A sections at chapter ends
   - Similar expression with previous pages
   - Talking about the act design of slides
@@ -43,8 +42,8 @@ Generate lecture scripts for a Java Intermediate course covering advanced object
   - Conversational tone throughout
   - Direct emphasis of important points
   - Varied presentation techniques across consecutive slides
-  - Focus exclusively on Java intermediate topics (Advanced OOP, Exception handling, IO operations, Multithreading, Network programming, Lambda expressions, Stream API, Design patterns, etc.)
-  - Use only analogies and examples related to Java programming
+  - Focus exclusively on Spring Boot practical topics (project initialization, environment setup, dependency management, configuration files, controller development, database integration, RESTful API, security authentication, deployment and operations, etc.)
+  - Use only analogies and examples related to Spring Boot development
 
 ## Process Requirements
 

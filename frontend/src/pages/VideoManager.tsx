@@ -61,7 +61,7 @@ const VideoSimplePage: React.FC = () => {
       setTranscodedList(res.data.encoded[currentTask] || []);
       setSelectedRowKeys([]);
     } catch {
-      message.error('获取视频列表失败');
+      message.error('動画リストの取得に失敗しました');
     }
   };
 
@@ -71,7 +71,7 @@ const VideoSimplePage: React.FC = () => {
       setFolders(res.data.folders);
       setView('folders');
     } catch {
-      message.error('获取文件夹列表失败');
+      message.error('フォルダリストの取得に失敗しました');
     }
   };
 
@@ -83,7 +83,7 @@ const VideoSimplePage: React.FC = () => {
       setFolderSelectedKeys([]);
       setView('folder');
     } catch {
-      message.error('获取文件列表失败');
+      message.error('ファイルリストの取得に失敗しました');
     }
   };
 
@@ -102,7 +102,7 @@ const VideoSimplePage: React.FC = () => {
     multiple: true,
     showUploadList: false as any,
     customRequest: async ({ file, onSuccess, onError }: any) => {
-      if (!currentTask) return message.warning('请先输入任务名称');
+      if (!currentTask) return message.warning('タスク名を入力してください');
 
       setUploading(true);
       const form = new FormData();
@@ -112,11 +112,11 @@ const VideoSimplePage: React.FC = () => {
         await axios.post('/api/videos/upload-multiple', form, {
           params: { filename: currentTask },
         });
-        message.success(`${file.name} 上传成功`);
+        message.success(`${file.name} アップロードに成功しました`);
         await fetchVideos();
         onSuccess && onSuccess(null, file);
       } catch {
-        message.error(`${file.name} 上传失败`);
+        message.error(`${file.name} アップロードに失敗しました`);
         onError && onError(new Error(), file);
       } finally {
         setUploading(false);
@@ -125,7 +125,7 @@ const VideoSimplePage: React.FC = () => {
   };
 
   const startTranscode = () => {
-    if (!currentTask) return message.warning('请先输入任务名称');
+    if (!currentTask) return message.warning('タスク名を入力してください');
 
     setProgressInfo(null);
     setTranscoding(true);
@@ -143,7 +143,7 @@ const VideoSimplePage: React.FC = () => {
           params: { filename: currentTask },
         });
       } catch {
-        message.error('无法开始转码');
+        message.error('変換を開始できません');
         setTranscoding(false);
         ws.close();
       }
@@ -172,7 +172,7 @@ const VideoSimplePage: React.FC = () => {
     };
 
     ws.onerror = () => {
-      message.error('WebSocket 连接失败');
+      message.error('WebSocket 接続に失敗しました');
       setTranscoding(false);
       ws.close();
     };
@@ -184,7 +184,7 @@ const VideoSimplePage: React.FC = () => {
         responseType: 'blob',
       })
       .then((res) => saveAs(res.data, name))
-      .catch(() => message.error(`"${name}" 下载失败`));
+      .catch(() => message.error(`"${name}" ダウンロードに失敗しました`));
   };
 
   const downloadSelected = () => {
@@ -198,7 +198,7 @@ const VideoSimplePage: React.FC = () => {
         responseType: 'blob',
       })
       .then((res) => saveAs(res.data, `${currentTask}.zip`))
-      .catch(() => message.error('下载失败'));
+      .catch(() => message.error('ダウンロードに失敗しました'));
   };
 
   const downloadFolder = () => {
@@ -212,29 +212,29 @@ const VideoSimplePage: React.FC = () => {
         responseType: 'blob',
       })
       .then((res) => saveAs(res.data, `${currentFolder}.zip`))
-      .catch(() => message.error('下载失败'));
+      .catch(() => message.error('ダウンロードに失敗しました'));
   };
 
   const originalColumns = [
-    { title: '文件名', dataIndex: 'name', key: 'name' },
+    { title: 'ファイル名', dataIndex: 'name', key: 'name' },
     {
-      title: '状态',
+      title: '状態',
       key: 'status',
       render: (_: any, rec: { name: string }) =>
         transcodedList.some((fn) => fn.endsWith(rec.name)) ? (
-          <Tag color="green">已转码</Tag>
+          <Tag color="green">変換済み</Tag>
         ) : (
-          <Tag color="orange">未转码</Tag>
+          <Tag color="orange">未変換</Tag>
         ),
     },
   ];
 
   const doneColumns = [
-    { title: '转码后文件名', dataIndex: 'name', key: 'name' },
+    { title: '変換後ファイル名', dataIndex: 'name', key: 'name' },
     {
-      title: '状态',
+      title: '状態',
       key: 'status',
-      render: () => <Tag color="green">已转码</Tag>,
+      render: () => <Tag color="green">変換済み</Tag>,
     },
   ];
 
@@ -253,9 +253,9 @@ const VideoSimplePage: React.FC = () => {
     return (
       <div style={{ padding: 24 }}>
         <Button onClick={() => setView('task')} style={{ marginBottom: 16 }}>
-          返回任务视图
+          タスクビューに戻る
         </Button>
-        <h3>转码文件夹列表</h3>
+        <h3>変換フォルダリスト</h3>
         <List
           bordered
           dataSource={folders}
@@ -277,12 +277,12 @@ const VideoSimplePage: React.FC = () => {
     return (
       <div style={{ padding: 24 }}>
         <Button onClick={fetchFolders} style={{ marginBottom: 16 }}>
-          返回文件夹列表
+          フォルダリストに戻る
         </Button>
-        <h3>文件夹: {currentFolder}</h3>
+        <h3>フォルダ: {currentFolder}</h3>
         <Space style={{ marginBottom: 16 }}>
           <Button onClick={downloadFolder} disabled={folderSelectedKeys.length === 0}>
-            下载选中文件
+            選択ファイルダウンロード
           </Button>
         </Space>
         <Table
@@ -290,7 +290,7 @@ const VideoSimplePage: React.FC = () => {
           dataSource={transcodedList.map((name) => ({ key: name, name }))}
           columns={doneColumns}
           pagination={false}
-          locale={{ emptyText: '暂无已转码视频' }}
+          locale={{ emptyText: '変換済み動画がありません' }}
         />
       </div>
     );
@@ -299,10 +299,10 @@ const VideoSimplePage: React.FC = () => {
   // Main task view
   return (
     <div style={{ padding: 24 }}>
-      <h2>视频转码工具</h2>
+      <h2>動画変換ツール</h2>
       <Space style={{ marginBottom: 16 }}>
         <Input
-          placeholder="请输入任务名称"
+          placeholder="タスク名を入力してください"
           value={taskName}
           onChange={(e) => setTaskName(e.target.value)}
           style={{ width: 200 }}
@@ -313,7 +313,7 @@ const VideoSimplePage: React.FC = () => {
             loading={uploading}
             disabled={!currentTask}
           >
-            上传视频
+            動画アップロード
           </Button>
         </Upload>
       </Space>
@@ -325,12 +325,12 @@ const VideoSimplePage: React.FC = () => {
           loading={transcoding}
           disabled={!currentTask}
         >
-          开始转码
+          変換開始
         </Button>
         <Button onClick={downloadSelected} disabled={selectedRowKeys.length === 0}>
-          下载已转码
+          変換済みダウンロード
         </Button>
-        <Button onClick={fetchFolders}>查看转码文件夹</Button>
+        <Button onClick={fetchFolders}>変換フォルダ表示</Button>
       </Space>
 
       {originalList.length === 0 && transcodedList.length === 0 ? (
@@ -343,27 +343,27 @@ const VideoSimplePage: React.FC = () => {
             minHeight: 200,
           }}
         >
-          <Empty description="暂无视频" />
+          <Empty description="動画がありません" />
         </div>
       ) : (
         <>
-          <h3>原始文件列表</h3>
+          <h3>元ファイルリスト</h3>
           <Table
             dataSource={originalList.map((n) => ({ key: n, name: n }))}
             columns={originalColumns}
             pagination={false}
-            locale={{ emptyText: '暂无原始视频' }}
+            locale={{ emptyText: '元動画がありません' }}
           />
 
           {transcodedList.length > 0 && (
             <>
-              <h3>已转码文件列表</h3>
+              <h3>変換済みファイルリスト</h3>
               <Table
                 rowSelection={rowSelection}
                 dataSource={transcodedList.map((n) => ({ key: n, name: n }))}
                 columns={doneColumns}
                 pagination={false}
-                locale={{ emptyText: '暂无已转码视频' }}
+                locale={{ emptyText: '変換済み動画がありません' }}
               />
             </>
           )}
