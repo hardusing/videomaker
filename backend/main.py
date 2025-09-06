@@ -16,13 +16,6 @@ import sys
 from app.utils.ppt_parser import extract_notes
 from app.utils.task_manager_memory import task_manager, TaskStatus
 
-from app.api import pdf_api
-from app.api import tts_api
-from app.api import download_api
-from app.api import notes_api
-from app.api import image_notes_api
-from app.api import video_api
-from app.api import task_api
 # ===================== 配置与数据结构 =====================
 from dotenv import load_dotenv
 # ✅ 1. 最先加载 .env 和日志配置
@@ -43,7 +36,7 @@ for d in [UPLOAD_DIR, OUTPUT_DIR, AUDIO_OUTPUT_DIR]:
     os.makedirs(d, exist_ok=True)
 
 # ✅ 3. 导入 API 模块
-from app.api import pdf_api, tts_api, download_api, notes_api, image_notes_api, video_api, task_api
+from app.api import pdf_api, tts_api, download_api, notes_api, image_notes_api, video_api, task_api, video_editor_api, workflow_api
 from app.utils.task_manager_memory import task_manager  # 确保导入正确
 
 
@@ -86,6 +79,8 @@ app.include_router(notes_api.router)
 app.include_router(image_notes_api.router)
 app.include_router(video_api.router)
 app.include_router(task_api.router)
+app.include_router(video_editor_api.router)
+app.include_router(workflow_api.router)
 app.mount("/srt_and_wav", StaticFiles(directory=AUDIO_OUTPUT_DIR), name="audio")
 app.mount("/converted_images", StaticFiles(directory="converted_images"), name="converted_images")
 app.mount("/processed_images", StaticFiles(directory="processed_images"), name="processed_images")

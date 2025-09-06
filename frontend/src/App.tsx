@@ -6,6 +6,8 @@ import TTSPage from './pages/TTSPage'
 import VideoManager from "./pages/VideoManager"; 
 import UploadPage from './pages/UploadPage'
 import ManualScreen from './pages/ManualScreen'
+import VideoEditor from './pages/VideoEditor'
+import WorkflowPage from './pages/WorkflowPage'
 
 const { Header, Content } = Layout
 
@@ -22,6 +24,8 @@ function App() {
           <Route path="/videos" element={<VideoManager />} />
           <Route path="/pdf" element={<UploadPage/>} />
           <Route path="/manual" element={<ManualScreen/>} />
+          <Route path="/video-editor" element={<VideoEditor/>} />
+          <Route path="/workflow" element={<WorkflowPage/>} />
 
           {/* 添加更多路由 */}
         </Routes>

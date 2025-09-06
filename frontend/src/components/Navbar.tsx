@@ -22,6 +22,14 @@ const Navbar: React.FC = () => {
        {
         key: '/manual',
         label: <Link to="/manual">マニュアル</Link>,  
+      },
+      {
+        key: '/video-editor',
+        label: <Link to="/video-editor">视频编辑器</Link>,  
+      },
+      {
+        key: '/workflow',
+        label: <Link to="/workflow">PPT工作流</Link>,  
       }
 
   ]

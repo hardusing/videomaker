@@ -1,0 +1,70 @@
+# JavaScript Beginner Course Script Generation - Requirements
+
+## Course Context
+
+Generate lecture scripts for a JavaScript beginner course covering fundamental concepts, variables and data types, operators, functions, control flow, loops, arrays, objects, DOM manipulation, event handling, and small practical projects, aimed at learners with zero programming background. The content focuses exclusively on JavaScript basics and practical applications, not involving artificial intelligence, machine learning, or other unrelated IT topics. Content will be provided as slides (one page at a time) for slide-by-slide script generation.
+
+## Core Output Requirements
+
+- Natural spoken language, approximately 4-5 minutes per slide (target: 800-900 English words per slide)
+- Concepts explained through relatable analogies and real-life examples
+- Interactive questions with [PAUSE5] pause markers (at least 3 times per slide)
+- Direct emphasis of key points in text
+- Detailed explanation of slide figures/illustrations
+- Output in japanese only
+
+## Audience Consideration
+
+- Zero technical or IT background
+- No prior JavaScript or programming knowledge
+- Need for highly accessible explanations
+- Examples should match audience comprehension level
+- No parenthetical expressions allowed
+
+## Content Guidelines
+
+- Use complete, natural sentences suitable for audio playback
+- Avoid:
+  - Technical jargon without explanation
+  - Enumerated lists
+  - Parenthetical expressions
+  - Q&A sections at chapter ends
+  - Similar expressions to previous pages
+  - Talking about slide design
+  - Transitions between chapters
+  - Markdown syntax like highlights etc.
+  - Repeating rhetorical techniques (rhetorical questions, interrogative sentences, etc.) used in recent pages
+  - Useless filler words like "well", "okay", "you know", etc.
+- Include:
+  - References to related content from previous chapters
+  - Clear explanations for any new examples
+  - Conversational tone throughout
+  - Direct emphasis of important points
+  - Varied presentation techniques across consecutive slides
+  - Focus exclusively on JavaScript fundamentals (variables, data types, operators, functions, control flow, loops, arrays, objects, DOM manipulation, event handling, practical projects, etc.)
+  - Use only analogies and examples related to JavaScript development
+
+## JavaScript-Specific Requirements
+
+- Use everyday metaphors to explain programming concepts (e.g., variables are like storage boxes, functions are like toolboxes)
+- Emphasize JavaScript's practical applications in web pages
+- Explain code line by line when presenting
+- Use simple daily scenarios to analogize complex concepts
+- Highlight JavaScript's interactive features with users
+- Emphasize the importance of practice and hands-on experience
+
+## Process Requirements
+
+- Generate one script per slide
+- Do not merge slide content
+- Script content must precisely match slide content
+- Identify and explain all visual elements
+- Ensure natural flow between slides
+
+## Input Format
+
+```
+[Previous page scripts]
+...
+[Content of the current page as image format]
+```
