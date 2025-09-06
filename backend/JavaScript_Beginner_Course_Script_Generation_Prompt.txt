@@ -35,6 +35,11 @@ Generate lecture scripts for a JavaScript beginner course covering fundamental c
   - Markdown syntax like highlights etc.
   - Repeating rhetorical techniques (rhetorical questions, interrogative sentences, etc.) used in recent pages
   - Useless filler words like "well", "okay", "you know", etc.
+  - Direct code display or quotation
+  - English terms (convert all to katakana)
+  - Numbered step explanations like "1. タスクを開始：最初の準備を整える段階"
+  - Enumerated explanations like "ループ処理の利点は、同じようなコードを何度も書く必要がなくなることです。これは例えば、100人分の会員データを処理する場合"
+  - Bullet point lists like "・商品一覧の表示" "・ユーザーリストの生成"
 - Include:
   - References to related content from previous chapters
   - Clear explanations for any new examples
@@ -43,6 +48,7 @@ Generate lecture scripts for a JavaScript beginner course covering fundamental c
   - Varied presentation techniques across consecutive slides
   - Focus exclusively on JavaScript fundamentals (variables, data types, operators, functions, control flow, loops, arrays, objects, DOM manipulation, event handling, practical projects, etc.)
   - Use only analogies and examples related to JavaScript development
+  - Natural flowing sentences instead of lists (e.g., "商品一覧を表示したり、ユーザーリストを生成したり")
 
 ## JavaScript-Specific Requirements
 
@@ -60,6 +66,21 @@ Generate lecture scripts for a JavaScript beginner course covering fundamental c
 - Script content must precisely match slide content
 - Identify and explain all visual elements
 - Ensure natural flow between slides
+
+## Output Style Examples
+
+**Preferred Natural Flow Style:**
+"ジャバスクリプトの条件分岐とループ処理について、実践的な例を交えながら詳しく説明していきましょう。プログラミングにおいて、条件分岐とループ処理は料理のレシピのようなものです。レシピには『もし材料があれば次の手順に進む』という条件や、『全ての具材が入るまで同じ作業を繰り返す』というループが含まれているのと同じように、プログラムでも似たような考え方で処理を組み立てていきます。"
+
+**Avoid These Formats:**
+- Numbered steps: "1. タスクを開始：最初の準備を整える段階"
+- Bullet points: "・商品一覧の表示"
+- Enumerated explanations with examples in lists
+- Direct code quotations
+- English technical terms (use katakana instead)
+
+**Convert to Natural Sentences:**
+Instead of listing benefits with bullets, use flowing narrative like: "ループ処理を使うことで、商品一覧を表示したり、ユーザーリストを生成したり、データベースから情報を取得したり、画像ギャラリーを表示したりする際に、同じような処理を効率的に繰り返すことができるようになります。"
 
 ## Input Format
 

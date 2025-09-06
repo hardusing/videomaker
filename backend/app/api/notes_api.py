@@ -548,7 +548,7 @@ async def generate_folder_scripts(
     print(f"[LOG] 输出目录: {output_dir}")
     
     # 获取提示词
-    base_prompt = prompt or read_file_as_text("课程讲稿生成prompt")
+    base_prompt = prompt or read_file_as_text("JavaScript_Beginner_Course_Script_Generation_Prompt.txt")
     url = "https://www.dmxapi.com/v1/chat/completions"
     
     scripts = []
@@ -687,7 +687,7 @@ async def generate_pages_script(
                 return int(match.group(1)) if match else None
             slides_imgs = [img for img in slides_imgs if extract_page_num(img) in pages]
             print(f"[LOG] 过滤后图片数量: {len(slides_imgs)}，选中页码: {pages}")
-        base_prompt = prompt or read_file_as_text("课程讲稿生成prompt")
+        base_prompt = prompt or read_file_as_text("JavaScript_Beginner_Course_Script_Generation_Prompt.txt")
         url = "https://www.dmxapi.com/v1/chat/completions"
         output_dir = Path("./notes_output") / subdir
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -760,7 +760,7 @@ async def generate_pages_script(
             print(f"[LOG] PDF已保存: {save_path}")
             slides_imgs = pdf_to_jpg(str(save_path), "./temp", max_size=768, dpi=300)
             print(f"[LOG] PDF {file.filename} 转换图片数量: {len(slides_imgs)}")
-            base_prompt = prompt or read_file_as_text("课程讲稿生成prompt")
+            base_prompt = prompt or read_file_as_text("JavaScript_Beginner_Course_Script_Generation_Prompt.txt")
             url = "https://www.dmxapi.com/v1/chat/completions"
             output_dir = Path("./notes_output") / Path(file.filename).stem
             output_dir.mkdir(parents=True, exist_ok=True)
