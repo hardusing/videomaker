@@ -1,0 +1,92 @@
+# Spring Boot Project Initialization and Environment Setup - Lecture Script Generation Prompt
+
+## Course Context
+
+Generate comprehensive lecture scripts for a Spring Boot practical course covering project initialization and environment setup. This is a hands-on tutorial that guides students through creating their first Spring Boot application from scratch. The content covers 11 progressive steps from basic setup to a complete REST API with database integration.
+
+## Target Audience
+
+- Beginner to intermediate Java developers
+- Students with basic Java knowledge but new to Spring Boot
+- Developers transitioning to Spring framework
+- Anyone wanting to learn modern Java web development
+
+## Core Output Requirements
+
+- Natural spoken language, approximately 4-5 minutes per slide (target: 800-1000 words per slide)
+- Step-by-step implementation guidance with clear explanations
+- Code explanations that are accessible to beginners
+- Interactive demonstrations with pause markers [PAUSE5] (at least 3 times per slide)
+- Direct emphasis of key concepts and best practices
+- Detailed explanation of code snippets and their purposes
+- Output in Japanese following natural conversation patterns
+
+
+## Script Generation Guidelines
+
+### Language and Tone
+- Use natural Japanese conversation style
+- Avoid technical jargon without proper explanation
+- Include encouraging phrases for beginners
+- Use analogies to explain complex concepts
+- Maintain enthusiasm and energy throughout
+
+### Code Explanation Requirements
+- Explain every annotation and its purpose
+- Break down complex code into digestible parts
+- Highlight common pitfalls and how to avoid them
+- Provide context for why certain approaches are used
+- Include best practices and industry standards
+
+### Interactive Elements
+- Include [PAUSE5] markers for hands-on practice
+- Suggest checkpoints where students should verify their progress
+- Encourage students to experiment with modifications
+- Provide troubleshooting tips for common issues
+
+### Practical Implementation Focus
+- Emphasize the "why" behind each step
+- Connect each component to the overall application architecture
+- Show how changes affect the running application
+- Demonstrate testing and verification methods
+- Include real-world context and use cases
+
+### Content Guidelines to Avoid
+- Don't assume prior Spring framework knowledge
+- Avoid overwhelming beginners with too many options
+- Don't skip explanation of basic concepts
+- Avoid using English technical terms without Japanese explanation
+- Don't rush through code without proper explanation
+- Avoid unnecessary filler words like はい, そうですね, etc.
+- Don't include formal introductory phrases like "Spring Bootの初心者向け講座の講義台本を作成させていただきます。まずは第1回目の講義部分を作成します。"
+- Don't use formal title formats like "Spring Boot入門 - 第1回：環境構築とプロジェクト準備"
+- Don't use section headers like 【導入部】、【環境確認】 etc.
+- Avoid displaying code blocks or code snippets in the script
+- Don't include English words or phrases in the output
+- Avoid numbered or bulleted lists like:
+  1. ブラウザでstart.spring.ioを開きます
+  2. 以下の設定を選択します：
+     - Project: Maven
+     - Language: Java
+- Don't use enumerated step-by-step instructions
+- Avoid parenthetical expressions and technical specifications
+
+### Content Guidelines to Include
+- Step-by-step verification after each implementation
+- Clear connection between theory and practice
+- Practical tips from real development experience
+- Common error scenarios and solutions
+- Performance and security considerations where appropriate
+- Use natural conversational flow instead of formal structures
+- Integrate technical concepts seamlessly into natural dialogue
+- Explain processes through storytelling and natural conversation
+- Use descriptive language to guide students through actions without showing code
+- Focus on conceptual understanding rather than mechanical steps
+
+## Expected Output Format
+
+Generate a natural, conversational lecture script that flows seamlessly from topic to topic. The script should feel like an experienced instructor naturally explaining concepts to students, without formal divisions or structured sections. Instead of showing code or using lists, describe what students should do using natural language and explanatory dialogue. The script should maintain an engaging, educational tone while guiding students through the learning process in a conversational manner.
+
+## Input Format
+
+The script should be generated based on the provided 11-step Spring Boot project content, with each step becoming a comprehensive lecture segment that builds upon the previous ones to create a complete learning experience.

@@ -459,7 +459,7 @@ class FolderScriptsRequest(BaseModel):
     prompt: str = Field(None, description="自定义prompt，可选")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "folder_name": "presentation",
                 "api_key": "your_api_key_here",
@@ -476,7 +476,7 @@ class FolderScriptsResponse(BaseModel):
     scripts: List[str] = Field(..., description="生成的脚本列表")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "message": "文稿生成成功",
                 "folder_name": "presentation",
@@ -547,8 +547,36 @@ async def generate_folder_scripts(
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"[LOG] 输出目录: {output_dir}")
     
-    # 获取提示词
-    base_prompt = prompt or read_file_as_text("JavaScript_Beginner_Course_Script_Generation_Prompt.txt")
+    # 获取提示词 - 优先使用传入的prompt参数
+    if prompt:
+        base_prompt = prompt
+    else:
+        # 如果没有传入prompt，使用默认的日文课程脚本生成要求
+        base_prompt = """
+# 日文课程脚本生成要求
+
+## 输出要求
+- 自然的日语口语表达，每页800-900字
+- 使用[PAUSE5]标记，每页至少3次
+- 避免以下内容：
+  - 直接显示代码片段
+  - 英文术语（全部转换为片假名）
+  - 番号付きリスト（如"1. xxx 2. xxx"）
+  - 箇条書き（如"・xxx ・xxx"）
+  - 列表式说明
+
+## 表达方式
+- 使用自然流畅的句子代替列表
+- 例如：用"商品一覧を表示したり、ユーザーリストを生成したり"代替箇条書き
+- 用自然叙述代替步骤编号
+- 所有技术概念用日常比喻解释
+
+## 内容结构
+- 每页独立完整的讲解
+- 包含实际应用场景
+- 鼓励学生思考的互动问题
+- 自然的会话语调
+"""
     url = "https://www.dmxapi.com/v1/chat/completions"
     
     scripts = []
@@ -687,7 +715,36 @@ async def generate_pages_script(
                 return int(match.group(1)) if match else None
             slides_imgs = [img for img in slides_imgs if extract_page_num(img) in pages]
             print(f"[LOG] 过滤后图片数量: {len(slides_imgs)}，选中页码: {pages}")
-        base_prompt = prompt or read_file_as_text("JavaScript_Beginner_Course_Script_Generation_Prompt.txt")
+        # 获取提示词 - 优先使用传入的prompt参数
+        if prompt:
+            base_prompt = prompt
+        else:
+            # 如果没有传入prompt，使用默认的日文课程脚本生成要求
+            base_prompt = """
+# 日文课程脚本生成要求
+
+## 输出要求
+- 自然的日语口语表达，每页800-900字
+- 使用[PAUSE5]标记，每页至少3次
+- 避免以下内容：
+  - 直接显示代码片段
+  - 英文术语（全部转换为片假名）
+  - 番号付きリスト（如"1. xxx 2. xxx"）
+  - 箇条書き（如"・xxx ・xxx"）
+  - 列表式说明
+
+## 表达方式
+- 使用自然流畅的句子代替列表
+- 例如：用"商品一覧を表示したり、ユーザーリストを生成したり"代替箇条書き
+- 用自然叙述代替步骤编号
+- 所有技术概念用日常比喻解释
+
+## 内容结构
+- 每页独立完整的讲解
+- 包含实际应用场景
+- 鼓励学生思考的互动问题
+- 自然的会话语调
+"""
         url = "https://www.dmxapi.com/v1/chat/completions"
         output_dir = Path("./notes_output") / subdir
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -760,7 +817,36 @@ async def generate_pages_script(
             print(f"[LOG] PDF已保存: {save_path}")
             slides_imgs = pdf_to_jpg(str(save_path), "./temp", max_size=768, dpi=300)
             print(f"[LOG] PDF {file.filename} 转换图片数量: {len(slides_imgs)}")
-            base_prompt = prompt or read_file_as_text("JavaScript_Beginner_Course_Script_Generation_Prompt.txt")
+            # 获取提示词 - 优先使用传入的prompt参数
+            if prompt:
+                base_prompt = prompt
+            else:
+                # 如果没有传入prompt，使用默认的日文课程脚本生成要求
+                base_prompt = """
+# 日文课程脚本生成要求
+
+## 输出要求
+- 自然的日语口语表达，每页800-900字
+- 使用[PAUSE5]标记，每页至少3次
+- 避免以下内容：
+  - 直接显示代码片段
+  - 英文术语（全部转换为片假名）
+  - 番号付きリスト（如"1. xxx 2. xxx"）
+  - 箇条書き（如"・xxx ・xxx"）
+  - 列表式说明
+
+## 表达方式
+- 使用自然流畅的句子代替列表
+- 例如：用"商品一覧を表示したり、ユーザーリストを生成したり"代替箇条書き
+- 用自然叙述代替步骤编号
+- 所有技术概念用日常比喻解释
+
+## 内容结构
+- 每页独立完整的讲解
+- 包含实际应用场景
+- 鼓励学生思考的互动问题
+- 自然的会话语调
+"""
             url = "https://www.dmxapi.com/v1/chat/completions"
             output_dir = Path("./notes_output") / Path(file.filename).stem
             output_dir.mkdir(parents=True, exist_ok=True)
@@ -917,4 +1003,181 @@ async def split_script(
     except Exception as e:
         print(f"[ERROR] 文件拆分失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"文件拆分失败: {str(e)}")
+
+
+class TextScriptRequest(BaseModel):
+    input_text: str = Field(..., description="用户输入的文字内容")
+    api_key: str = Field(default="sk-xdtZS13EcaCHxoRbL50JDdP85EUKEhXtg4IcBKSKgF4ObTvW", description="API Key，有默认值")
+    prompt: str = Field(None, description="自定义prompt，可选")
+    output_filename: str = Field(default="text_script", description="输出文件名，可选")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "input_text": "今天我们要学习Spring Boot的基础概念，包括依赖注入、自动配置等重要特性。",
+                "api_key": "sk-xdtZS13EcaCHxoRbL50JDdP85EUKEhXtg4IcBKSKgF4ObTvW",
+                "prompt": "请将这段文字转换成适合讲课的专业讲稿，语言要通俗易懂",
+                "output_filename": "spring_boot_intro"
+            }
+        }
+
+class TextScriptResponse(BaseModel):
+    message: str = Field(..., description="处理结果消息")
+    input_text: str = Field(..., description="输入的文字内容")
+    generated_script: str = Field(..., description="生成的讲稿内容")
+    output_file: str = Field(..., description="保存的文件路径")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "message": "讲稿生成成功",
+                "input_text": "今天我们要学习Spring Boot...",
+                "generated_script": "大家好，今天我们将深入探讨Spring Boot...",
+                "output_file": "notes_output/text_scripts/spring_boot_intro.txt"
+            }
+        }
+
+@router.post(
+    "/generate-text-script",
+    tags=["文字讲稿生成"],
+    summary="根据文字生成讲稿",
+    description="""
+    根据用户输入的文字内容生成专业讲稿。
+    
+    输入:
+    - input_text: 用户输入的文字内容
+    - api_key: 用于调用AI生成讲稿的API密钥
+    - prompt: 可选的自定义提示词
+    - output_filename: 输出文件名（可选）
+    
+    处理流程:
+    1. 接收用户输入的文字内容
+    2. 使用AI根据文字内容和提示词生成讲稿
+    3. 保存生成的讲稿到notes_output目录
+    
+    返回:
+    - 生成的讲稿内容和保存路径
+    """,
+    response_model=TextScriptResponse
+)
+async def generate_text_script(
+    input_text: str = Form(..., description="用户输入的文字内容"),
+    api_key: str = Form(default="sk-xdtZS13EcaCHxoRbL50JDdP85EUKEhXtg4IcBKSKgF4ObTvW", description="API Key，有默认值"),
+    prompt: str = Form(default=None, description="自定义prompt，可选"),
+    output_filename: str = Form(default="text_script", description="输出文件名，可选")
+):
+    """
+    根据用户输入的文字生成讲稿
+    """
+    print(f"[LOG] 接收到文字讲稿生成请求: output_filename={output_filename}")
+    print(f"[LOG] 接收到参数: api_key={api_key[:10] if api_key else None}..., prompt={prompt[:50] if prompt else None}...")
+    print(f"[LOG] 输入文字长度: {len(input_text)}")
+    
+    if not input_text.strip():
+        raise HTTPException(status_code=400, detail="输入文字不能为空")
+    
+    # 准备输出目录
+    output_dir = Path("./notes_output") / "text_scripts"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"[LOG] 输出目录: {output_dir}")
+    
+    # 获取提示词 - 优先使用传入的prompt参数
+    if prompt:
+        full_prompt = prompt
+    else:
+        # 如果没有传入prompt，使用通用的讲稿生成要求
+        full_prompt = """
+请严格基于用户提供的文字内容生成对应的专业讲稿。要求如下：
+
+## 核心要求
+- 必须紧密贴合用户提供的具体内容主题和技术要点
+- 不要偏离用户输入的实际内容
+- 不要使用与用户内容无关的通用模板
+
+## 输出要求
+- 语言自然流畅，适合口语表达，使用日语
+- 内容结构清晰，逻辑性强
+- 使用通俗易懂的语言解释专业概念
+- 加入适当的互动元素和引导语，使用[PAUSE5]标记
+- 保持专业性和权威性
+
+## 表达方式
+- 使用自然的对话语调
+- 适当增加解释和举例
+- 避免过于书面化的表达
+- 加入适当的过渡语句
+- 突出重点内容
+- 避免多余的填充词如はい、そうですね等
+- 不要使用编号列表或代码块
+- 不要使用英文术语，用日语解释
+
+## 内容处理
+- 严格按照用户提供的内容结构进行讲解
+- 如果用户提供了多页内容，要按页面顺序进行讲解
+- 保持技术内容的准确性
+- 将技术概念转化为容易理解的讲解
+
+请严格基于以下用户提供的具体内容生成讲稿：
+"""
+    
+    # API请求URL
+    url = "https://www.dmxapi.com/v1/chat/completions"
+    
+    # 构建完整的提示词
+    complete_prompt = f"{full_prompt}\n\n{input_text}"
+    
+    # API请求配置
+    payload = {
+        "model": "claude-3-5-sonnet-20241022",
+        "messages": [
+            {"role": "system", "content": "你是一位经验丰富的IT技术讲师，专门将用户提供的具体技术内容转换成生动有趣的日语讲稿。你必须严格按照用户提供的内容主题和技术要点进行讲解，不能偏离或使用无关的内容模板。"},
+            {"role": "user", "content": complete_prompt}
+        ],
+        "temperature": 0.7,
+        "max_tokens": 4000,
+        "user": "DMXAPI",
+    }
+    
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}",
+        "User-Agent": "DMXAPI/1.0.0 (https://www.dmxapi.com/)",
+    }
+    
+    try:
+        print(f"[LOG] 开始调用API生成讲稿...")
+        response = requests.post(url, headers=headers, json=payload)
+        print(f"[LOG] API响应状态: {response.status_code}")
+        
+        if response.status_code == 200:
+            result = response.json()
+            generated_script = result["choices"][0]["message"]["content"]
+        else:
+            error_msg = f"API调用失败: {response.status_code} {response.text}"
+            print(f"[ERROR] {error_msg}")
+            raise HTTPException(status_code=500, detail=error_msg)
+            
+    except Exception as e:
+        error_msg = f"API调用异常: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        raise HTTPException(status_code=500, detail=error_msg)
+    
+    # 保存生成的讲稿
+    output_file = output_dir / f"{output_filename}.txt"
+    try:
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(generated_script)
+        print(f"[LOG] 讲稿已保存到: {output_file}")
+    except Exception as e:
+        error_msg = f"文件保存失败: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        raise HTTPException(status_code=500, detail=error_msg)
+    
+    print(f"[LOG] 文字讲稿生成完成")
+    return {
+        "message": "讲稿生成成功",
+        "input_text": input_text,
+        "generated_script": generated_script,
+        "output_file": str(output_file.relative_to(Path("./notes_output")))
+    }
 
