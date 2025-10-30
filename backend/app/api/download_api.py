@@ -70,6 +70,21 @@ async def download_all_srt_and_wav(
         background=background_tasks
     )
 
+@router.get("/api/srt-wav/folders")
+async def list_srt_wav_folders():
+    """
+    获取srt_and_wav目录下的所有文件夹
+    """
+    if not SRT_WAV_DIR.exists():
+        return {"folders": []}
+    
+    folders = []
+    for item in SRT_WAV_DIR.iterdir():
+        if item.is_dir():
+            folders.append(item.name)
+    
+    return {"folders": sorted(folders)}
+
 @router.get("/api/files/list", response_model=List[str])
 async def list_all_files(
     task_id: str = Query(None, description="任务ID"),

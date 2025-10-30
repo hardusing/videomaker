@@ -33,6 +33,8 @@ const TTSPage: React.FC = () => {
   const [selectedNotesFolder, setSelectedNotesFolder] = useState<string>('');
   const [ttsLanguage, setTtsLanguage] = useState('male');
   const [generatingTts, setGeneratingTts] = useState<boolean>(false);
+  const [srtWavFolders, setSrtWavFolders] = useState<string[]>([]);
+  const [selectedSrtWavFolder, setSelectedSrtWavFolder] = useState<string>('');
   const wsRef = useRef<WebSocket | null>(null);
 
   const fetchTaskList = async () => {
@@ -74,6 +76,25 @@ const TTSPage: React.FC = () => {
       // 根据选中的文件夹获取音频和字幕文件
       const filesRes = await axios.get('http://localhost:8000/api/files/list', {
         params: { dir_name: selectedTtsFolder }
+      });
+      const files: string[] = filesRes.data || [];
+      setAudioFiles(files.filter(f => f.endsWith('.wav')));
+      setSubtitleFiles(files.filter(f => f.endsWith('_merged.srt')));
+    } catch (error) {
+      // 如果目录不存在或没有文件，不报错，只是清空文件列表
+      console.log('フォルダに音声ファイルがないか、ディレクトリが存在しません');
+      setAudioFiles([]);
+      setSubtitleFiles([]);
+    }
+  };
+
+  const fetchSrtWavFiles = async () => {
+    if (!selectedSrtWavFolder) return;
+    try {
+      setFolderName(selectedSrtWavFolder);
+      // 根据选中的文件夹获取音频和字幕文件
+      const filesRes = await axios.get('http://localhost:8000/api/files/list', {
+        params: { dir_name: selectedSrtWavFolder }
       });
       const files: string[] = filesRes.data || [];
       setAudioFiles(files.filter(f => f.endsWith('.wav')));
@@ -145,6 +166,21 @@ const TTSPage: React.FC = () => {
     } catch (error) {
       console.error('notesフォルダの取得に失敗:', error);
       message.error(`notesフォルダの取得に失敗: ${error.response?.data?.detail || error.message}`);
+    }
+  };
+
+  const fetchSrtWavFolders = async () => {
+    try {
+      console.log('srt_and_wavフォルダを取得中...');
+      const res = await axios.get('http://localhost:8000/api/srt-wav/folders');
+      console.log('取得したsrt_and_wavフォルダデータ:', res.data);
+      
+      const folders = res.data.folders || [];
+      console.log('抽出されたsrt_and_wavフォルダ:', folders);
+      setSrtWavFolders(folders);
+    } catch (error) {
+      console.error('srt_and_wavフォルダの取得に失敗:', error);
+      message.error(`srt_and_wavフォルダの取得に失敗: ${error.response?.data?.detail || error.message}`);
     }
   };
 
@@ -294,9 +330,16 @@ const TTSPage: React.FC = () => {
   const handleDownloadSelectedMediaZip = async () => {
     const mediaFiles = selectedFiles.filter(name => name.endsWith('.wav') || name.endsWith('.srt'));
     if (mediaFiles.length === 0) return;
+    
+    const currentDir = selectedSrtWavFolder || selectedTtsFolder;
+    if (!currentDir) {
+      message.error('フォルダが選択されていません');
+      return;
+    }
+    
     const link = document.createElement('a');
-    link.href = `http://localhost:8000/api/download/all?dir_name=${selectedTtsFolder}`;
-    link.download = `${folderName}_srt_and_wav.zip`;
+    link.href = `http://localhost:8000/api/download/all?dir_name=${currentDir}`;
+    link.download = `${currentDir}_srt_and_wav.zip`;
     link.target = '_blank';
     document.body.appendChild(link);
     link.click();
@@ -309,17 +352,39 @@ const TTSPage: React.FC = () => {
   };
 
   const deleteSingleFile = async (filename: string) => {
+    const currentDir = selectedSrtWavFolder || selectedTtsFolder;
+    if (!currentDir) {
+      message.error('フォルダが選択されていません');
+      return;
+    }
+    
     await axios.delete(`http://localhost:8000/api/files/delete/${filename}`, {
-      params: { dir_name: selectedTtsFolder }
+      params: { dir_name: currentDir }
     });
-    fetchGeneratedFiles();
+    
+    if (selectedSrtWavFolder) {
+      fetchSrtWavFiles();
+    } else {
+      fetchGeneratedFiles();
+    }
   };
 
   const deleteAllFiles = async () => {
+    const currentDir = selectedSrtWavFolder || selectedTtsFolder;
+    if (!currentDir) {
+      message.error('フォルダが選択されていません');
+      return;
+    }
+    
     await axios.delete('http://localhost:8000/api/files/clear', {
-      params: { dir_name: selectedTtsFolder }
+      params: { dir_name: currentDir }
     });
-    fetchGeneratedFiles();
+    
+    if (selectedSrtWavFolder) {
+      fetchSrtWavFiles();
+    } else {
+      fetchGeneratedFiles();
+    }
   };
 
   const deleteTask = async () => {
@@ -349,6 +414,7 @@ const TTSPage: React.FC = () => {
   useEffect(() => {
     fetchAvailableFolders();
     fetchNotesFolders();
+    fetchSrtWavFolders();
     (async () => {
       setVoice(await getConfig('voice'));
       setSpeechKey(await getConfig('speech_key'));
@@ -361,6 +427,11 @@ const TTSPage: React.FC = () => {
     fetchImages();
     setSelectedFiles([]);
   }, [selectedNotesFolder, selectedTtsFolder]);
+
+  useEffect(() => {
+    fetchSrtWavFiles();
+    setSelectedFiles([]);
+  }, [selectedSrtWavFolder]);
 
   const getConfig = async (key: string) => {
     const res = await axios.get(`http://localhost:8000/api/tts/get-config/${key}`);
@@ -377,66 +448,8 @@ const TTSPage: React.FC = () => {
   return (
     <div style={{ padding: 24 }}>
              <h2>TTS 音声と字幕生成</h2>
-      <Space>
-                 <Select
-           placeholder="フォルダを選択"
-          value={selectedTtsFolder || undefined}
-          onChange={(value) => {
-            setSelectedTtsFolder(value);
-            setSelectedFiles([]); // 清空选中的文件
-          }}
-          style={{ width: 300 }}
-          showSearch
-          filterOption={(input, option: any) =>
-            (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
-          }
-          allowClear
-        >
-          {ttsFolders.map(folder => (
-            <Option key={folder} value={folder}>
-              {folder}
-            </Option>
-          ))}
-        </Select>
-                 <Button onClick={fetchNotesFolders}>更新</Button>
-         <Button danger onClick={deleteTask}>フォルダ削除</Button>
-      </Space>
 
-             <Card title="TTS 設定" style={{ marginTop: 16 }}>
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Input
-            value={speechKey}
-            onChange={(e) => setSpeechKey(e.target.value)}
-            addonAfter={<Button onClick={() => setConfig('speech_key', speechKey)}>保存</Button>}
-            placeholder="Speech Key"
-          />
-          
-                     <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 16, marginTop: 16 }}>
-             <h4>音声生成設定</h4>
-                           <Select
-                 value={ttsLanguage}
-                 onChange={setTtsLanguage}
-                 style={{ width: '100%', marginBottom: 8 }}
-                 placeholder="言語の種類を選択"
-               >
-                 <Option value="male">日本語男性音声 (ja-JP-DaichiNeural)</Option>
-                 <Option value="female">日本語女性音声 (ja-JP-NanamiNeural)</Option>
-                 <Option value="chinese_female">中国語女性音声 (zh-CN-XiaoxiaoNeural)</Option>
-               </Select>
-                           <Button 
-                 type="primary" 
-                 onClick={handleGenerateTts} 
-                 disabled={!selectedTtsFolder || !ttsLanguage || generatingTts}
-                 loading={generatingTts}
-                 style={{ width: '100%' }}
-               >
-                 {generatingTts ? '音声生成中...' : '音声生成'}
-               </Button>
-          </div>
-        </Space>
-      </Card>
-
-             <Card title="原稿生成" style={{ marginTop: 24 }}>
+             <Card title="原稿生成" style={{ marginTop: 16 }}>
         <div style={{ marginBottom: 16 }}>
                      <Input value={noteApiKey} onChange={(e) => setNoteApiKey(e.target.value)} placeholder="APIキーを入力してください" style={{ marginBottom: 8 }} />
            <Input.TextArea value={notePrompt} onChange={(e) => setNotePrompt(e.target.value)} placeholder="プロンプトを入力してください（オプション）" rows={2} style={{ marginBottom: 8 }} />
@@ -514,61 +527,188 @@ const TTSPage: React.FC = () => {
           </Select>
                      <Button onClick={fetchNotesFolders}>更新</Button>
         </Space>
-        {selectedNotesFolder && (
-          <Table
-            rowSelection={{
-              selectedRowKeys: selectedFiles,
-              onChange: keys => setSelectedFiles(keys as string[]),
-              hideSelectAll: true
-            }}
-            dataSource={txtFiles.map(f => ({ key: f, name: f }))}
-                         columns={[{
-               title: '原稿',
-              render: (row) => (
-                <a href={`http://localhost:8000/api/notes/${encodeURIComponent(row.name)}?dir_name=${encodeURIComponent(selectedNotesFolder)}`} target="_blank" rel="noopener noreferrer">{row.name}</a>
-              )
-            }]}
-                         locale={{ emptyText: 'このフォルダに原稿ファイルがありません' }}
+                 <Table
+           rowSelection={{
+             selectedRowKeys: selectedFiles,
+             onChange: keys => setSelectedFiles(keys as string[]),
+             hideSelectAll: true
+           }}
+           dataSource={txtFiles.map(f => ({ key: f, name: f }))}
+           columns={[{
+             title: '原稿',
+             render: (row) => (
+               <a href={`http://localhost:8000/api/notes/${encodeURIComponent(row.name)}?dir_name=${encodeURIComponent(selectedNotesFolder)}`} target="_blank" rel="noopener noreferrer">{row.name}</a>
+             )
+           }]}
+           pagination={false}
+           size="small"
+                       locale={{ emptyText: 'このフォルダに原稿ファイルがありません' }}
           />
-        )}
 
-             <h3>音声ファイル</h3>
-      <Table
-        rowSelection={{
-          selectedRowKeys: selectedFiles,
-          onChange: keys => setSelectedFiles(keys as string[]),
-          hideSelectAll: true
-        }}
-        dataSource={audioFiles.map(f => ({ key: f, name: f }))}
-                 columns={[{
-           title: '音声',
-          render: (row) => (
-                         <Space>
-               <audio controls src={`http://localhost:8000/srt_and_wav/${folderName}/${encodeURIComponent(row.name)}`} />
-               <Button danger onClick={() => deleteSingleFile(row.name)}>削除</Button>
+       <Card title="生成字幕和音频" style={{ marginTop: 24 }}>
+         <Space direction="vertical" style={{ width: '100%' }}>
+           <div>
+             <h4>フォルダ選択</h4>
+             <Space>
+               <Select
+                 placeholder="フォルダを選択"
+                 value={selectedTtsFolder || undefined}
+                 onChange={(value) => {
+                   setSelectedTtsFolder(value);
+                   setSelectedFiles([]); // 清空选中的文件
+                 }}
+                 style={{ width: 300 }}
+                 showSearch
+                 filterOption={(input, option: any) =>
+                   (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
+                 }
+                 allowClear
+               >
+                 {ttsFolders.map(folder => (
+                   <Option key={folder} value={folder}>
+                     {folder}
+                   </Option>
+                 ))}
+               </Select>
+               <Button onClick={fetchNotesFolders}>更新</Button>
+               <Button danger onClick={deleteTask}>フォルダ削除</Button>
              </Space>
-          )
-        }]}
-      />
+           </div>
+           
+           <Input
+             value={speechKey}
+             onChange={(e) => setSpeechKey(e.target.value)}
+             addonAfter={<Button onClick={() => setConfig('speech_key', speechKey)}>保存</Button>}
+             placeholder="Speech Key"
+           />
+           
+                     <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 16, marginTop: 16 }}>
+             <h4>音声生成設定</h4>
+                           <Select
+                 value={ttsLanguage}
+                 onChange={setTtsLanguage}
+                 style={{ width: '100%', marginBottom: 8 }}
+                 placeholder="言語の種類を選択"
+               >
+                 <Option value="male">日本語男性音声 (ja-JP-DaichiNeural)</Option>
+                 <Option value="female">日本語女性音声 (ja-JP-NanamiNeural)</Option>
+                 <Option value="chinese_female">中国語女性音声 (zh-CN-XiaoxiaoNeural)</Option>
+               </Select>
+                           <Button 
+                 type="primary" 
+                 onClick={handleGenerateTts} 
+                 disabled={!selectedTtsFolder || !ttsLanguage || generatingTts}
+                 loading={generatingTts}
+                 style={{ width: '100%' }}
+               >
+                 {generatingTts ? '音声生成中...' : '音声生成'}
+               </Button>
+          </div>
+        </Space>
+      </Card>
 
-             <h3>字幕ファイル</h3>
-      <Table
-        rowSelection={{
-          selectedRowKeys: selectedFiles,
-          onChange: keys => setSelectedFiles(keys as string[]),
-          hideSelectAll: true
-        }}
-        dataSource={subtitleFiles.map(f => ({ key: f, name: f }))}
-        columns={[{
-          title: '字幕',
-          render: (row) => (
-                         <Space>
-               <a href={`http://localhost:8000/srt_and_wav/${folderName}/${encodeURIComponent(row.name)}`} download>{row.name}</a>
-               <Button danger onClick={() => deleteSingleFile(row.name)}>削除</Button>
-             </Space>
-          )
-        }]}
-      />
+                             <div style={{ marginTop: '16px', marginBottom: '16px' }}>
+                <Space style={{ marginBottom: '16px' }}>
+                  <Select
+                    placeholder="srt_and_wav のフォルダを選択"
+                    value={selectedSrtWavFolder || undefined}
+                    onChange={(value) => {
+                      setSelectedSrtWavFolder(value);
+                      setSelectedFiles([]); // 清空选中的文件
+                    }}
+                    style={{ width: 300 }}
+                    showSearch
+                    filterOption={(input, option: any) =>
+                      (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
+                    }
+                    allowClear
+                  >
+                    {srtWavFolders.map(folder => (
+                      <Option key={folder} value={folder}>
+                        {folder}
+                      </Option>
+                    ))}
+                  </Select>
+                  <Button onClick={fetchSrtWavFolders}>更新</Button>
+                  <Button 
+                    type="primary" 
+                    onClick={() => {
+                      if (!selectedSrtWavFolder) {
+                        message.warning('フォルダを選択してください');
+                        return;
+                      }
+                      const link = document.createElement('a');
+                      link.href = `http://localhost:8000/api/download/all?dir_name=${selectedSrtWavFolder}`;
+                      link.download = `${selectedSrtWavFolder}_srt_and_wav.zip`;
+                      link.target = '_blank';
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      message.success('ダウンロード開始');
+                    }}
+                    disabled={!selectedSrtWavFolder}
+                  >
+                    全ダウンロード
+                  </Button>
+                </Space>
+              </div>
+
+             <div style={{ display: 'flex', gap: '16px', marginTop: '16px' }}>
+               <div style={{ flex: 1 }}>
+                 <h3>音声ファイル</h3>
+                 <Table
+                   rowSelection={{
+                     selectedRowKeys: selectedFiles,
+                     onChange: keys => setSelectedFiles(keys as string[]),
+                     hideSelectAll: true
+                   }}
+                                                           dataSource={audioFiles.map(f => ({ key: f, name: f }))}
+                     columns={[
+                       {
+                         title: 'ファイル名',
+                         dataIndex: 'name',
+                         key: 'name',
+                         width: 200,
+                       },
+                       {
+                         title: '音声',
+                         key: 'audio',
+                         render: (row) => (
+                           <Space>
+                             <audio controls src={`http://localhost:8000/srt_and_wav/${selectedSrtWavFolder || folderName}/${encodeURIComponent(row.name)}`} />
+                             <Button danger onClick={() => deleteSingleFile(row.name)}>削除</Button>
+                           </Space>
+                         )
+                       }
+                     ]}
+                   pagination={false}
+                   size="small"
+                 />
+               </div>
+               
+               <div style={{ flex: 1 }}>
+                 <h3>字幕ファイル</h3>
+                 <Table
+                   rowSelection={{
+                     selectedRowKeys: selectedFiles,
+                     onChange: keys => setSelectedFiles(keys as string[]),
+                     hideSelectAll: true
+                   }}
+                                       dataSource={subtitleFiles.map(f => ({ key: f, name: f }))}
+                    columns={[{
+                      title: '字幕',
+                      render: (row) => (
+                        <Space>
+                          <a href={`http://localhost:8000/srt_and_wav/${selectedSrtWavFolder || folderName}/${encodeURIComponent(row.name)}`} download>{row.name}</a>
+                          <Button danger onClick={() => deleteSingleFile(row.name)}>削除</Button>
+                        </Space>
+                      )
+                    }]}
+                   pagination={false}
+                   size="small"
+                 />
+               </div>
+             </div>
 
              <Card title="Break タグ確認" style={{ marginTop: 32 }}>
         <Table

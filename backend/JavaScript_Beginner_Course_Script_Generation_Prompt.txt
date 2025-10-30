@@ -1,8 +1,8 @@
-# JavaScript Beginner Course Script Generation - Requirements
+# AIエージェント基礎コース講義スクリプト生成 - 要件
 
 ## Course Context
 
-Generate lecture scripts for a JavaScript beginner course covering fundamental concepts, variables and data types, operators, functions, control flow, loops, arrays, objects, DOM manipulation, event handling, and small practical projects, aimed at learners with zero programming background. The content focuses exclusively on JavaScript basics and practical applications, not involving artificial intelligence, machine learning, or other unrelated IT topics. Content will be provided as slides (one page at a time) for slide-by-slide script generation.
+AIエージェントの基礎概念、動作原理、実装方法、応用分野、エージェント設計、意思決定プロセス、学習アルゴリズム、環境との相互作用、タスク実行、エラーハンドリング、パフォーマンス最適化、実践的なプロジェクトを含むAIエージェント初心者向けコースの講義スクリプトを生成します。プログラミング経験のない学習者を対象とし、AIエージェントの基本概念と実践的応用に焦点を当てます。スライドは1ページずつ提供され、スライドごとのスクリプト生成を行います。
 
 ## Core Output Requirements
 
@@ -16,7 +16,7 @@ Generate lecture scripts for a JavaScript beginner course covering fundamental c
 ## Audience Consideration
 
 - Zero technical or IT background
-- No prior JavaScript or programming knowledge
+- No prior AIエージェント or programming knowledge
 - Need for highly accessible explanations
 - Examples should match audience comprehension level
 - No parenthetical expressions allowed
@@ -41,17 +41,17 @@ Generate lecture scripts for a JavaScript beginner course covering fundamental c
   - Conversational tone throughout
   - Direct emphasis of important points
   - Varied presentation techniques across consecutive slides
-  - Focus exclusively on JavaScript fundamentals (variables, data types, operators, functions, control flow, loops, arrays, objects, DOM manipulation, event handling, practical projects, etc.)
-  - Use only analogies and examples related to JavaScript development
+  - Focus exclusively on AIエージェント fundamentals (agent architecture, decision making, learning algorithms, environment interaction, task execution, error handling, performance optimization, practical projects, etc.)
+  - Use only analogies and examples related to AIエージェント development
 
-## JavaScript-Specific Requirements
+## AIエージェント-Specific Requirements
 
-- Use everyday metaphors to explain programming concepts (e.g., variables are like storage boxes, functions are like toolboxes)
-- Emphasize JavaScript's practical applications in web pages
-- Explain code line by line when presenting
-- Use simple daily scenarios to analogize complex concepts
-- Highlight JavaScript's interactive features with users
-- Emphasize the importance of practice and hands-on experience
+- Use everyday metaphors to explain AIエージェント concepts (e.g., agents are like autonomous assistants, decision making is like choosing the best path)
+- Emphasize AIエージェント's practical applications in various industries
+- Explain agent behavior and decision processes step by step when presenting
+- Use simple daily scenarios to analogize complex AI concepts
+- Highlight AIエージェント's autonomous and adaptive features
+- Emphasize the importance of practice and hands-on experience with agent development
 
 ## Process Requirements
 
