@@ -30,6 +30,10 @@ const Navbar: React.FC = () => {
       {
         key: '/workflow',
         label: <Link to="/workflow">PPT工作流</Link>,  
+      },
+      {
+        key: '/text-script',
+        label: <Link to="/text-script">文字生成讲稿</Link>,  
       }
 
   ]

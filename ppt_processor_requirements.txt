@@ -1,0 +1,24 @@
+# PPT转图片并识别文字脚本的依赖包
+# 安装命令: pip install -r ppt_processor_requirements.txt
+
+# 核心依赖
+comtypes>=1.1.14          # Windows COM对象，用于PowerPoint操作
+PyMuPDF>=1.23.0           # PDF处理库
+Pillow>=9.0.0             # 图片处理库
+pytesseract>=0.3.10       # OCR文字识别库
+
+# 必需依赖 - AI文本优化
+openai>=0.28.0            # OpenAI API客户端（必需）
+
+# 系统依赖说明:
+# 1. Tesseract OCR 引擎需要单独安装:
+#    - Windows: https://github.com/UB-Mannheim/tesseract/wiki
+#    - macOS: brew install tesseract tesseract-lang
+#    - Ubuntu: sudo apt install tesseract-ocr tesseract-ocr-chi-sim
+#
+# 2. 中文OCR支持需要安装中文语言包:
+#    - Windows: 下载时选择Additional language data
+#    - macOS: brew install tesseract-lang
+#    - Ubuntu: sudo apt install tesseract-ocr-chi-sim
+#
+# 3. PowerPoint COM对象需要Windows系统并安装Microsoft Office

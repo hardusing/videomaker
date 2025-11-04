@@ -8,6 +8,7 @@ import UploadPage from './pages/UploadPage'
 import ManualScreen from './pages/ManualScreen'
 import VideoEditor from './pages/VideoEditor'
 import WorkflowPage from './pages/WorkflowPage'
+import TextScriptPage from './pages/TextScriptPage'
 
 const { Header, Content } = Layout
 
@@ -26,6 +27,7 @@ function App() {
           <Route path="/manual" element={<ManualScreen/>} />
           <Route path="/video-editor" element={<VideoEditor/>} />
           <Route path="/workflow" element={<WorkflowPage/>} />
+          <Route path="/text-script" element={<TextScriptPage/>} />
 
           {/* 添加更多路由 */}
         </Routes>
