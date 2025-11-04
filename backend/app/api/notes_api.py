@@ -513,7 +513,7 @@ class FolderScriptsResponse(BaseModel):
 async def generate_folder_scripts(
     folder_name: str = Form(..., description="processed_images下的文件夹名称"),
     api_key: str = Form(..., description="API Key，必需"),
-    prompt: str = Form(default=None, description="自定义prompt，可选")
+    prompt: str = Form(..., description="自定义prompt，必需")
 ):
     """
     为指定文件夹下的所有图片生成文稿
@@ -547,40 +547,18 @@ async def generate_folder_scripts(
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"[LOG] 输出目录: {output_dir}")
     
-    # 获取提示词 - 优先使用传入的prompt参数
-    if prompt:
-        base_prompt = prompt
-    else:
-        # 如果没有传入prompt，使用默认的日文课程脚本生成要求
-        base_prompt = """
-# 日文课程脚本生成要求
-
-## 输出要求
-- 自然的日语口语表达，每页800-900字
-- 使用[PAUSE5]标记，每页至少3次
-- 避免以下内容：
-  - 直接显示代码片段
-  - 英文术语（全部转换为片假名）
-  - 番号付きリスト（如"1. xxx 2. xxx"）
-  - 箇条書き（如"・xxx ・xxx"）
-  - 列表式说明
-
-## 表达方式
-- 使用自然流畅的句子代替列表
-- 例如：用"商品一覧を表示したり、ユーザーリストを生成したり"代替箇条書き
-- 用自然叙述代替步骤编号
-- 所有技术概念用日常比喻解释
-
-## 内容结构
-- 每页独立完整的讲解
-- 包含实际应用场景
-- 鼓励学生思考的互动问题
-- 自然的会话语调
-"""
+    # 获取提示词 - 必须使用传入的prompt参数
+    base_prompt = prompt
     url = "https://www.dmxapi.com/v1/chat/completions"
     
     scripts = []
     recent_scripts = []
+    
+    # 初始化token统计变量
+    total_tokens_used = 0
+    total_prompt_tokens = 0
+    total_completion_tokens = 0
+    token_details = []
     
     for i, slide in enumerate(slides_imgs, 1):
         print(f"[LOG] 开始处理图片 {i}/{len(slides_imgs)}: {slide.name}")
@@ -609,8 +587,8 @@ async def generate_folder_scripts(
                     {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_slide}"}},
                 ]},
             ],
-            "temperature": 0.4,
-            "max_tokens": 4000,
+            "temperature": 0.6,
+            "max_tokens": 6000,
             "user": "DMXAPI",
         }
         
@@ -627,12 +605,54 @@ async def generate_folder_scripts(
             if response.status_code == 200:
                 result = response.json()
                 script = result["choices"][0]["message"]["content"]
+                
+                # 记录token使用量
+                usage = result.get("usage", {})
+                prompt_tokens = usage.get("prompt_tokens", 0)
+                completion_tokens = usage.get("completion_tokens", 0)
+                total_tokens = usage.get("total_tokens", 0)
+                
+                # 累计token统计
+                total_tokens_used += total_tokens
+                total_prompt_tokens += prompt_tokens
+                total_completion_tokens += completion_tokens
+                
+                # 记录每页的token详情
+                page_token_info = {
+                    "page": i,
+                    "image_name": slide.name,
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": total_tokens
+                }
+                token_details.append(page_token_info)
+                
+                print(f"[LOG] 第{i}页token使用量 - 输入: {prompt_tokens}, 输出: {completion_tokens}, 总计: {total_tokens}")
+                
             else:
                 script = f"API调用失败: {response.status_code} {response.text}"
                 print(f"[ERROR] API调用失败: {response.text}")
+                # API失败时也记录一条记录，token为0
+                token_details.append({
+                    "page": i,
+                    "image_name": slide.name,
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "total_tokens": 0,
+                    "error": f"API调用失败: {response.status_code}"
+                })
         except Exception as e:
             print(f"[ERROR] API异常: {e}")
             script = f"API异常: {e}"
+            # API异常时也记录一条记录，token为0
+            token_details.append({
+                "page": i,
+                "image_name": slide.name,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "error": f"API异常: {str(e)}"
+            })
         
         # 保存脚本
         script_with_page = f"Page {i}:\n{script}"
@@ -655,262 +675,38 @@ async def generate_folder_scripts(
         f.write("\n\n".join(scripts))
     print(f"[LOG] 合并脚本已保存到: {combined_script_file}")
     
+    # 保存token使用统计到文件
+    token_summary_file = output_dir / f"{folder_name}_token_usage.txt"
+    with open(token_summary_file, "w", encoding="utf-8") as f:
+        f.write(f"Token使用统计报告\n")
+        f.write(f"===================\n")
+        f.write(f"总处理图片数: {len(slides_imgs)}\n")
+        f.write(f"总消耗token: {total_tokens_used}\n")
+        f.write(f"输入token: {total_prompt_tokens}\n")
+        f.write(f"输出token: {total_completion_tokens}\n")
+        f.write(f"平均每页token: {total_tokens_used // len(slides_imgs) if slides_imgs else 0}\n\n")
+        f.write(f"详细统计:\n")
+        for detail in token_details:
+            f.write(f"第{detail['page']}页 ({detail['image_name']}): ")
+            if 'error' in detail:
+                f.write(f"处理失败 - {detail['error']}\n")
+            else:
+                f.write(f"输入{detail['prompt_tokens']} + 输出{detail['completion_tokens']} = 总计{detail['total_tokens']}\n")
+    
     print(f"[LOG] 全部处理完成，成功生成文稿数: {len(scripts)}")
+    print(f"[LOG] Token使用统计 - 总计: {total_tokens_used}, 输入: {total_prompt_tokens}, 输出: {total_completion_tokens}")
+    
     return {
         "message": "文稿生成成功",
         "folder_name": folder_name,
         "processed_images": len(slides_imgs),
         "output_directory": str(output_dir),
         "combined_script_file": str(combined_script_file),
-        "scripts": scripts
-    }
-
-@router.post("/generate-pages-script")
-async def generate_pages_script(
-    task_id: str = Query(None, description="任务ID，可选"),
-    filename: str = Query(None, description="目录名/文件名，可选"),
-    files: List[UploadFile] = File(default=None, description="多个文件，可选"),
-    api_key: str = Form(..., description="API Key，可自定义"),
-    prompt: str = Form(default=None, description="自定义prompt，可选"),
-    pages: List[int] = Form(default=None, description="选中的页码，可选")
-):
-    print(f"[LOG] 接收到请求: task_id={task_id}, filename={filename}, files数量={len(files) if files else 0}")
-    print(f"[LOG] 接收到参数: api_key={api_key[:10] if api_key else None}..., prompt={prompt[:50] if prompt else None}..., pages={pages}")
-    if not task_id and not filename and not files:
-        print("[ERROR] 参数缺失，必须提供 task_id、filename 或 files")
-        raise HTTPException(status_code=400, detail="必须提供 task_id、filename 或 files")
-
-    scripts = []
-    recent_scripts = []
-    output_file = None  # 最终稿件txt文件路径
-    if task_id or filename:
-        subdir = None
-        if task_id:
-            from app.utils.task_manager_memory import task_manager
-            task = task_manager.get_task(task_id)
-            print(f"[LOG] 通过task_id获取到任务: {task}")
-            if not task:
-                print("[ERROR] 任务不存在")
-                raise HTTPException(status_code=404, detail="任务不存在")
-            if task["type"] == "pdf_upload":
-                subdir = task["data"].get("original_filename", "").rsplit(".", 1)[0]
-            elif task["type"] == "pdf_to_images":
-                subdir = task["data"].get("pdf_filename", "").rsplit(".", 1)[0]
-            elif task["type"] == "ppt_upload":
-                subdir = task["data"].get("original_filename", "").rsplit(".", 1)[0]
-        elif filename:
-            subdir = filename
-        target_dir = PROCESSED_IMAGES_DIR / subdir
-        print(f"[LOG] 目标图片目录: {target_dir}")
-        if not target_dir.exists() or not target_dir.is_dir():
-            print("[ERROR] 目录不存在")
-            raise HTTPException(status_code=404, detail="目录不存在")
-        slides_imgs = []
-        for ext in ["*.jpg", "*.jpeg", "*.png"]:
-            slides_imgs.extend(target_dir.glob(ext))
-        print(f"[LOG] 待处理图片数量: {len(slides_imgs)}")
-        if pages:
-            def extract_page_num(p):
-                match = re.search(r"(\d+)", p.stem)
-                return int(match.group(1)) if match else None
-            slides_imgs = [img for img in slides_imgs if extract_page_num(img) in pages]
-            print(f"[LOG] 过滤后图片数量: {len(slides_imgs)}，选中页码: {pages}")
-        # 获取提示词 - 优先使用传入的prompt参数
-        if prompt:
-            base_prompt = prompt
-        else:
-            # 如果没有传入prompt，使用默认的日文课程脚本生成要求
-            base_prompt = """
-# 日文课程脚本生成要求
-
-## 输出要求
-- 自然的日语口语表达，每页800-900字
-- 使用[PAUSE5]标记，每页至少3次
-- 避免以下内容：
-  - 直接显示代码片段
-  - 英文术语（全部转换为片假名）
-  - 番号付きリスト（如"1. xxx 2. xxx"）
-  - 箇条書き（如"・xxx ・xxx"）
-  - 列表式说明
-
-## 表达方式
-- 使用自然流畅的句子代替列表
-- 例如：用"商品一覧を表示したり、ユーザーリストを生成したり"代替箇条書き
-- 用自然叙述代替步骤编号
-- 所有技术概念用日常比喻解释
-
-## 内容结构
-- 每页独立完整的讲解
-- 包含实际应用场景
-- 鼓励学生思考的互动问题
-- 自然的会话语调
-"""
-        url = "https://www.dmxapi.com/v1/chat/completions"
-        output_dir = Path("./notes_output") / subdir
-        output_dir.mkdir(parents=True, exist_ok=True)
-        for i, slide in enumerate(slides_imgs, 1):
-            print(f"[LOG] 开始处理图片: {slide}")
-            time.sleep(5)
-            encoded_slide = encode_image(slide)
-            print(f"[LOG] 图片base64编码长度: {len(encoded_slide)}")
-            previous_scripts = "\n".join(
-                [f"Page {i-j}:\n{script}" for j, script in enumerate(reversed(recent_scripts), 1)]
-            )
-            full_prompt = (
-                f"{base_prompt}\n\n[Scripts of Previous pages]\n{previous_scripts}"
-                if recent_scripts else base_prompt
-            )
-            payload = {
-                "model": "claude-3-5-sonnet-20241022",
-                "messages": [
-                    {"role": "system", "content": "You are an experienced lecture for IT skill training, now you are in charge of writing scripts for various IT courses."},
-                    {"role": "user", "content": [
-                        {"type": "text", "text": full_prompt},
-                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_slide}"}},
-                    ]},
-                ],
-                "temperature": 0.4,
-                "max_tokens": 4000,
-                "user": "DMXAPI",
-            }
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_key}",
-                "User-Agent": "DMXAPI/1.0.0 (https://www.dmxapi.com/)",
-            }
-            try:
-                response = requests.post(url, headers=headers, json=payload)
-                print(f"[LOG] API响应状态: {response.status_code}")
-                if response.status_code == 200:
-                    result = response.json()
-                    script = result["choices"][0]["message"]["content"]
-                else:
-                    script = f"API调用失败: {response.status_code} {response.text}"
-            except Exception as e:
-                print(f"[ERROR] API异常: {e}")
-                script = f"API异常: {e}"
-            script_with_page = f"Page {i}:\n{script}"
-            scripts.append(script_with_page)
-            recent_scripts.append(script)
-            if len(recent_scripts) > 6:
-                recent_scripts.pop(0)
-            # 自动保存每页为单独txt
-            page_txt = output_dir / f"{slide.stem}.txt"
-            with open(page_txt, "w", encoding="utf-8") as f:
-                f.write(script)
-            print(f"[LOG] 单页脚本已保存到: {page_txt}")
-        # 自动保存总稿件
-        # output_file = output_dir / f"{subdir}_scripts.txt"
-        # with open(output_file, "w", encoding="utf-8") as f:
-        #     f.write("\n\n".join(scripts))
-        # print(f"[LOG] 脚本已保存到: {output_file}")
-    else:
-        for file in files:
-            print(f"[LOG] 处理上传文件: {file.filename}")
-            if not file.filename.endswith(".pdf"):
-                print(f"[ERROR] 文件类型不支持: {file.filename}")
-                raise HTTPException(status_code=400, detail="只支持 PDF 文件")
-            save_path = Path("./pdf_uploads") / file.filename
-            save_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(save_path, "wb") as f:
-                f.write(await file.read())
-            print(f"[LOG] PDF已保存: {save_path}")
-            slides_imgs = pdf_to_jpg(str(save_path), "./temp", max_size=768, dpi=300)
-            print(f"[LOG] PDF {file.filename} 转换图片数量: {len(slides_imgs)}")
-            # 获取提示词 - 优先使用传入的prompt参数
-            if prompt:
-                base_prompt = prompt
-            else:
-                # 如果没有传入prompt，使用默认的日文课程脚本生成要求
-                base_prompt = """
-# 日文课程脚本生成要求
-
-## 输出要求
-- 自然的日语口语表达，每页800-900字
-- 使用[PAUSE5]标记，每页至少3次
-- 避免以下内容：
-  - 直接显示代码片段
-  - 英文术语（全部转换为片假名）
-  - 番号付きリスト（如"1. xxx 2. xxx"）
-  - 箇条書き（如"・xxx ・xxx"）
-  - 列表式说明
-
-## 表达方式
-- 使用自然流畅的句子代替列表
-- 例如：用"商品一覧を表示したり、ユーザーリストを生成したり"代替箇条書き
-- 用自然叙述代替步骤编号
-- 所有技术概念用日常比喻解释
-
-## 内容结构
-- 每页独立完整的讲解
-- 包含实际应用场景
-- 鼓励学生思考的互动问题
-- 自然的会话语调
-"""
-            url = "https://www.dmxapi.com/v1/chat/completions"
-            output_dir = Path("./notes_output") / Path(file.filename).stem
-            output_dir.mkdir(parents=True, exist_ok=True)
-            for i, slide in enumerate(slides_imgs, 1):
-                print(f"[LOG] 开始处理图片: {slide}")
-                time.sleep(5)
-                encoded_slide = encode_image(slide)
-                print(f"[LOG] 图片base64编码长度: {len(encoded_slide)}")
-                previous_scripts = "\n".join(
-                    [f"Page {i-j}:\n{script}" for j, script in enumerate(reversed(recent_scripts), 1)]
-                )
-                full_prompt = (
-                    f"{base_prompt}\n\n[Scripts of Previous pages]\n{previous_scripts}"
-                    if recent_scripts else base_prompt
-                )
-                payload = {
-                    "model": "claude-3-5-sonnet-20241022",
-                    "messages": [
-                        {"role": "system", "content": "You are an experienced lecture for IT skill training, now you are in charge of writing scripts for various IT courses."},
-                        {"role": "user", "content": [
-                            {"type": "text", "text": full_prompt},
-                            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_slide}"}},
-                        ]},
-                    ],
-                    "temperature": 0.4,
-                    "max_tokens": 4000,
-                    "user": "DMXAPI",
-                }
-                headers = {
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}",
-                    "User-Agent": "DMXAPI/1.0.0 (https://www.dmxapi.com/)",
-                }
-                try:
-                    response = requests.post(url, headers=headers, json=payload)
-                    print(f"[LOG] API响应状态: {response.status_code}")
-                    if response.status_code == 200:
-                        result = response.json()
-                        script = result["choices"][0]["message"]["content"]
-                    else:
-                        script = f"API调用失败: {response.status_code} {response.text}"
-                except Exception as e:
-                    print(f"[ERROR] API异常: {e}")
-                    script = f"API异常: {e}"
-                script_with_page = f"Page {i}:\n{script}"
-                scripts.append(script_with_page)
-                recent_scripts.append(script)
-                if len(recent_scripts) > 6:
-                    recent_scripts.pop(0)
-                # 自动保存每页为单独txt
-                page_txt = output_dir / f"{slide.stem}.txt"
-                with open(page_txt, "w", encoding="utf-8") as f:
-                    f.write(script)
-                print(f"[LOG] 单页脚本已保存到: {page_txt}")
-            # 自动保存总稿件
-            # output_file = output_dir / f"{Path(file.filename).stem}_scripts.txt"
-            # with open(output_file, "w", encoding="utf-8") as f:
-            #     f.write("\n\n".join(scripts))
-            # print(f"[LOG] 脚本已保存到: {output_file}")
-    print(f"[LOG] 全部处理完成，成功生成文稿数: {len(scripts)}")
-    return {
-        "message": "生成成功",
         "scripts": scripts,
-        "txt_file": str(output_file) if output_file else None
+        "total_tokens_used": total_tokens_used,
+        "prompt_tokens_used": total_prompt_tokens,
+        "completion_tokens_used": total_completion_tokens,
+        "token_details": token_details
     }
 
 @router.post("/split-script")
