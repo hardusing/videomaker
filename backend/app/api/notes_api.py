@@ -606,28 +606,92 @@ async def generate_folder_scripts(
                 result = response.json()
                 script = result["choices"][0]["message"]["content"]
                 
-                # 记录token使用量
+                # 记录token使用量（首次输出）
                 usage = result.get("usage", {})
                 prompt_tokens = usage.get("prompt_tokens", 0)
                 completion_tokens = usage.get("completion_tokens", 0)
                 total_tokens = usage.get("total_tokens", 0)
+
+                # 当前页累计（可能包含续写）
+                page_prompt_tokens = prompt_tokens
+                page_completion_tokens = completion_tokens
+                page_total_tokens = total_tokens
                 
-                # 累计token统计
+                # 累计到总统计
                 total_tokens_used += total_tokens
                 total_prompt_tokens += prompt_tokens
                 total_completion_tokens += completion_tokens
-                
-                # 记录每页的token详情
+
+                print(f"[LOG] 第{i}页首次输出token - 输入: {prompt_tokens}, 输出: {completion_tokens}, 总计: {total_tokens}")
+
+                # 篇幅自检循环（二次补全逻辑）：若输出token < 700，则自动续写一次（复用同一prompt，前置续写前缀）
+                if page_completion_tokens < 800:
+                    continue_needed = 800 - page_completion_tokens
+                    print(f"[LOG] 第{i}页输出token为 {page_completion_tokens}，触发续写，目标补足: {continue_needed} token")
+                    
+                    continue_prefix = "please continue to write and complete the script.Use the same language as the previous script to continue.do not write from the beginning but continue from the last line."
+                    continue_text = f"{continue_prefix}\n{full_prompt}"
+                    
+                    # 复用原始请求的模型与参数，仅修改user内容
+                    continue_payload = {
+                        "model": payload["model"],
+                        "messages": [
+                            {"role": "system", "content": payload["messages"][0]["content"]},
+                            {"role": "user", "content": [
+                                {"type": "text", "text": continue_text},
+                                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_slide}"}},
+                            ]},
+                        ],
+                        "temperature": payload.get("temperature", 0.6),
+                        # 续写最大输出限制：尽量补足至不少于600，总体不超过原max_tokens
+                        "max_tokens": payload.get("max_tokens", 4000),
+                        "user": payload.get("user", "DMXAPI"),
+                    }
+
+                    try:
+                        time.sleep(3)  # 与首次调用稍作间隔
+                        cont_resp = requests.post(url, headers=headers, json=continue_payload)
+                        print(f"[LOG] 续写API响应状态: {cont_resp.status_code}")
+
+                        if cont_resp.status_code == 200:
+                            cont_result = cont_resp.json()
+                            cont_script = cont_result["choices"][0]["message"]["content"]
+
+                            # 拼接续写内容
+                            script = f"{script}\n{cont_script}"
+
+                            # 续写token统计
+                            cont_usage = cont_result.get("usage", {})
+                            cont_prompt_tokens = cont_usage.get("prompt_tokens", 0)
+                            cont_completion_tokens = cont_usage.get("completion_tokens", 0)
+                            cont_total_tokens = cont_usage.get("total_tokens", 0)
+
+                            # 累计到当前页
+                            page_prompt_tokens += cont_prompt_tokens
+                            page_completion_tokens += cont_completion_tokens
+                            page_total_tokens += cont_total_tokens
+
+                            # 累计到总统计
+                            total_tokens_used += cont_total_tokens
+                            total_prompt_tokens += cont_prompt_tokens
+                            total_completion_tokens += cont_completion_tokens
+
+                            print(f"[LOG] 第{i}页续写token - 输入: {cont_prompt_tokens}, 输出: {cont_completion_tokens}, 总计: {cont_total_tokens}")
+                            print(f"[LOG] 第{i}页合计输出token: {page_completion_tokens}（目标>=600）")
+                        else:
+                            print(f"[ERROR] 续写API调用失败: {cont_resp.text}")
+                    except Exception as ce:
+                        print(f"[ERROR] 续写API异常: {ce}")
+
+                # 记录每页的token详情（聚合首次 + 续写）
                 page_token_info = {
                     "page": i,
                     "image_name": slide.name,
-                    "prompt_tokens": prompt_tokens,
-                    "completion_tokens": completion_tokens,
-                    "total_tokens": total_tokens
+                    "prompt_tokens": page_prompt_tokens,
+                    "completion_tokens": page_completion_tokens,
+                    "total_tokens": page_total_tokens
                 }
                 token_details.append(page_token_info)
-                
-                print(f"[LOG] 第{i}页token使用量 - 输入: {prompt_tokens}, 输出: {completion_tokens}, 总计: {total_tokens}")
                 
             else:
                 script = f"API调用失败: {response.status_code} {response.text}"
@@ -833,147 +897,4 @@ class TextScriptResponse(BaseModel):
             }
         }
 
-@router.post(
-    "/generate-text-script",
-    tags=["文字讲稿生成"],
-    summary="根据文字生成讲稿",
-    description="""
-    根据用户输入的文字内容生成专业讲稿。
-    
-    输入:
-    - input_text: 用户输入的文字内容
-    - api_key: 用于调用AI生成讲稿的API密钥
-    - prompt: 可选的自定义提示词
-    - output_filename: 输出文件名（可选）
-    
-    处理流程:
-    1. 接收用户输入的文字内容
-    2. 使用AI根据文字内容和提示词生成讲稿
-    3. 保存生成的讲稿到notes_output目录
-    
-    返回:
-    - 生成的讲稿内容和保存路径
-    """,
-    response_model=TextScriptResponse
-)
-async def generate_text_script(
-    input_text: str = Form(..., description="用户输入的文字内容"),
-    api_key: str = Form(default="sk-xdtZS13EcaCHxoRbL50JDdP85EUKEhXtg4IcBKSKgF4ObTvW", description="API Key，有默认值"),
-    prompt: str = Form(default=None, description="自定义prompt，可选"),
-    output_filename: str = Form(default="text_script", description="输出文件名，可选")
-):
-    """
-    根据用户输入的文字生成讲稿
-    """
-    print(f"[LOG] 接收到文字讲稿生成请求: output_filename={output_filename}")
-    print(f"[LOG] 接收到参数: api_key={api_key[:10] if api_key else None}..., prompt={prompt[:50] if prompt else None}...")
-    print(f"[LOG] 输入文字长度: {len(input_text)}")
-    
-    if not input_text.strip():
-        raise HTTPException(status_code=400, detail="输入文字不能为空")
-    
-    # 准备输出目录
-    output_dir = Path("./notes_output") / "text_scripts"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    print(f"[LOG] 输出目录: {output_dir}")
-    
-    # 获取提示词 - 优先使用传入的prompt参数
-    if prompt:
-        full_prompt = prompt
-    else:
-        # 如果没有传入prompt，使用通用的讲稿生成要求
-        full_prompt = """
-请严格基于用户提供的文字内容生成对应的专业讲稿。要求如下：
-
-## 核心要求
-- 必须紧密贴合用户提供的具体内容主题和技术要点
-- 不要偏离用户输入的实际内容
-- 不要使用与用户内容无关的通用模板
-
-## 输出要求
-- 语言自然流畅，适合口语表达，使用日语
-- 内容结构清晰，逻辑性强
-- 使用通俗易懂的语言解释专业概念
-- 加入适当的互动元素和引导语，使用[PAUSE5]标记
-- 保持专业性和权威性
-
-## 表达方式
-- 使用自然的对话语调
-- 适当增加解释和举例
-- 避免过于书面化的表达
-- 加入适当的过渡语句
-- 突出重点内容
-- 避免多余的填充词如はい、そうですね等
-- 不要使用编号列表或代码块
-- 不要使用英文术语，用日语解释
-
-## 内容处理
-- 严格按照用户提供的内容结构进行讲解
-- 如果用户提供了多页内容，要按页面顺序进行讲解
-- 保持技术内容的准确性
-- 将技术概念转化为容易理解的讲解
-
-请严格基于以下用户提供的具体内容生成讲稿：
-"""
-    
-    # API请求URL
-    url = "https://www.dmxapi.com/v1/chat/completions"
-    
-    # 构建完整的提示词
-    complete_prompt = f"{full_prompt}\n\n{input_text}"
-    
-    # API请求配置
-    payload = {
-        "model": "claude-3-5-sonnet-20241022",
-        "messages": [
-            {"role": "system", "content": "你是一位经验丰富的IT技术讲师，专门将用户提供的具体技术内容转换成生动有趣的日语讲稿。你必须严格按照用户提供的内容主题和技术要点进行讲解，不能偏离或使用无关的内容模板。"},
-            {"role": "user", "content": complete_prompt}
-        ],
-        "temperature": 0.7,
-        "max_tokens": 4000,
-        "user": "DMXAPI",
-    }
-    
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}",
-        "User-Agent": "DMXAPI/1.0.0 (https://www.dmxapi.com/)",
-    }
-    
-    try:
-        print(f"[LOG] 开始调用API生成讲稿...")
-        response = requests.post(url, headers=headers, json=payload)
-        print(f"[LOG] API响应状态: {response.status_code}")
-        
-        if response.status_code == 200:
-            result = response.json()
-            generated_script = result["choices"][0]["message"]["content"]
-        else:
-            error_msg = f"API调用失败: {response.status_code} {response.text}"
-            print(f"[ERROR] {error_msg}")
-            raise HTTPException(status_code=500, detail=error_msg)
-            
-    except Exception as e:
-        error_msg = f"API调用异常: {str(e)}"
-        print(f"[ERROR] {error_msg}")
-        raise HTTPException(status_code=500, detail=error_msg)
-    
-    # 保存生成的讲稿
-    output_file = output_dir / f"{output_filename}.txt"
-    try:
-        with open(output_file, "w", encoding="utf-8") as f:
-            f.write(generated_script)
-        print(f"[LOG] 讲稿已保存到: {output_file}")
-    except Exception as e:
-        error_msg = f"文件保存失败: {str(e)}"
-        print(f"[ERROR] {error_msg}")
-        raise HTTPException(status_code=500, detail=error_msg)
-    
-    print(f"[LOG] 文字讲稿生成完成")
-    return {
-        "message": "讲稿生成成功",
-        "input_text": input_text,
-        "generated_script": generated_script,
-        "output_file": str(output_file.relative_to(Path("./notes_output")))
-    }
 

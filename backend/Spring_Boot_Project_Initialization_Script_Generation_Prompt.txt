@@ -1,15 +1,16 @@
-# Spring Boot Project Initialization and Environment Setup - Lecture Script Generation Prompt
+RAG System Development and Retrieval Pipeline Course – Lecture Script Generation Prompt (English Version)
+Course Context
 
-## Course Context
-
-Generate comprehensive lecture scripts for a Spring Boot practical course covering project initialization and environment setup. This is a hands-on tutorial that guides students through creating their first Spring Boot application from scratch. The content covers 11 progressive steps from basic setup to a complete REST API with database integration.
-
+Generate comprehensive lecture scripts for a hands-on RAG (Retrieval-Augmented Generation) course covering complete system development and environment setup. This is a practical tutorial guiding students through building a full RAG application from scratch. The content spans 11 progressive steps, from foundational concept understanding to building the complete retrieval pipeline, vector database integration, and generation refinement.
 ## Target Audience
 
-- Beginner to intermediate Java developers
-- Students with basic Java knowledge but new to Spring Boot
-- Developers transitioning to Spring framework
-- Anyone wanting to learn modern Java web development
+Beginner to intermediate AI/LLM developers
+
+Learners who understand basic LLM concepts but are new to RAG
+
+Engineers who want to integrate retrieval augmentation into applications
+
+Developers aiming to improve QA quality through RAG in real-world systems
 
 ## Core Output Requirements
 
