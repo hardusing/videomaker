@@ -579,7 +579,7 @@ async def generate_folder_scripts(
         
         # API请求
         payload = {
-            "model": "claude-3-5-sonnet-20241022",
+            "model": "claude-3-7-sonnet-20250219",
             "messages": [
                 {"role": "system", "content": "You are an experienced lecturer for IT skill training, now you are in charge of writing scripts for various IT courses."},
                 {"role": "user", "content": [
@@ -624,14 +624,41 @@ async def generate_folder_scripts(
 
                 print(f"[LOG] 第{i}页首次输出token - 输入: {prompt_tokens}, 输出: {completion_tokens}, 总计: {total_tokens}")
 
-                # 篇幅自检循环（二次补全逻辑）：若输出token < 700，则自动续写一次（复用同一prompt，前置续写前缀）
-                if page_completion_tokens < 800:
-                    continue_needed = 800 - page_completion_tokens
-                    print(f"[LOG] 第{i}页输出token为 {page_completion_tokens}，触发续写，目标补足: {continue_needed} token")
-                    
-                    continue_prefix = "please continue to write and complete the script.Use the same language as the previous script to continue.do not write from the beginning but continue from the last line."
-                    continue_text = f"{continue_prefix}\n{full_prompt}"
-                    
+                # 计算当前页脚本字数统计
+                current_script_word_stats = count_script_words(script)
+                current_script_words = current_script_word_stats['total_chars_no_space']
+                print(f"[LOG] 第{i}页首次输出字数 - 总字符数（不含空格）: {current_script_words}")
+
+                # 篇幅自检循环：循环续写直到字数>=800 或 总token>=6000
+                min_words_required = 800
+                max_tokens_limit = 6000
+                continue_round = 0
+
+                while current_script_words < min_words_required and page_total_tokens < max_tokens_limit:
+                    continue_round += 1
+                    words_needed = min_words_required - current_script_words
+                    print(f"[LOG] 第{i}页第{continue_round}轮续写 - 当前字数: {current_script_words}，需补充约 {words_needed} 字，当前总token: {page_total_tokens}")
+
+                    current_script_text = script.strip()
+                    continue_prefix = (
+                        "The following is the current lecture script for this slide. "
+                        "It is shorter than required. Please expand and enrich it using the same language, tone, and structure. "
+                        "Return a polished, fully enriched version that keeps the original meaning but adds more substance."
+                        "Do not add any preface, explanation, or meta commentary—only output the revised script content itself."
+                        "No greetings or salutations at the beginning."
+                    )
+
+                    continue_sections = [
+                        continue_prefix,
+                        f"[Current Script Draft]\n{current_script_text}" if current_script_text else "[Current Script Draft]\n(空白草稿)",
+                    ]
+
+                    if recent_scripts:
+                        continue_sections.append(f"[Scripts of Previous pages]\n{previous_scripts}")
+
+                    continue_sections.append(f"[Original Prompt Guidance]\n{base_prompt}")
+                    continue_text = "\n\n".join(section for section in continue_sections if section.strip())
+
                     # 复用原始请求的模型与参数，仅修改user内容
                     continue_payload = {
                         "model": payload["model"],
@@ -643,7 +670,6 @@ async def generate_folder_scripts(
                             ]},
                         ],
                         "temperature": payload.get("temperature", 0.6),
-                        # 续写最大输出限制：尽量补足至不少于600，总体不超过原max_tokens
                         "max_tokens": payload.get("max_tokens", 4000),
                         "user": payload.get("user", "DMXAPI"),
                     }
@@ -651,14 +677,14 @@ async def generate_folder_scripts(
                     try:
                         time.sleep(3)  # 与首次调用稍作间隔
                         cont_resp = requests.post(url, headers=headers, json=continue_payload)
-                        print(f"[LOG] 续写API响应状态: {cont_resp.status_code}")
+                        print(f"[LOG] 第{continue_round}轮续写API响应状态: {cont_resp.status_code}")
 
                         if cont_resp.status_code == 200:
                             cont_result = cont_resp.json()
                             cont_script = cont_result["choices"][0]["message"]["content"]
 
-                            # 拼接续写内容
-                            script = f"{script}\n{cont_script}"
+                            # 使用续写结果覆盖当前脚本，避免简单拼接
+                            script = cont_script.strip()
 
                             # 续写token统计
                             cont_usage = cont_result.get("usage", {})
@@ -676,12 +702,22 @@ async def generate_folder_scripts(
                             total_prompt_tokens += cont_prompt_tokens
                             total_completion_tokens += cont_completion_tokens
 
-                            print(f"[LOG] 第{i}页续写token - 输入: {cont_prompt_tokens}, 输出: {cont_completion_tokens}, 总计: {cont_total_tokens}")
-                            print(f"[LOG] 第{i}页合计输出token: {page_completion_tokens}（目标>=600）")
+                            # 重新统计字数
+                            current_script_word_stats = count_script_words(script)
+                            current_script_words = current_script_word_stats['total_chars_no_space']
+
+                            print(f"[LOG] 第{i}页第{continue_round}轮续写完成 - 新增token: {cont_total_tokens} (输入{cont_prompt_tokens}+输出{cont_completion_tokens})")
+                            print(f"[LOG] 第{i}页当前统计 - 总字数: {current_script_words}, 总token: {page_total_tokens}")
                         else:
-                            print(f"[ERROR] 续写API调用失败: {cont_resp.text}")
+                            print(f"[ERROR] 第{continue_round}轮续写API调用失败: {cont_resp.text}")
+                            break  # API失败则退出循环
                     except Exception as ce:
-                        print(f"[ERROR] 续写API异常: {ce}")
+                        print(f"[ERROR] 第{continue_round}轮续写API异常: {ce}")
+                        break  # API异常则退出循环
+
+                # 输出最终统计
+                if continue_round > 0:
+                    print(f"[LOG] 第{i}页续写完成 - 共续写{continue_round}轮，最终字数: {current_script_words}，最终总token: {page_total_tokens}")
 
                 # 记录每页的token详情（聚合首次 + 续写）
                 page_token_info = {
@@ -724,7 +760,7 @@ async def generate_folder_scripts(
         recent_scripts.append(script)
         
         # 保持最近6页的上下文
-        if len(recent_scripts) > 6:
+        if len(recent_scripts) > 3:
             recent_scripts.pop(0)
         
         # 保存单页文稿
@@ -756,9 +792,28 @@ async def generate_folder_scripts(
                 f.write(f"处理失败 - {detail['error']}\n")
             else:
                 f.write(f"输入{detail['prompt_tokens']} + 输出{detail['completion_tokens']} = 总计{detail['total_tokens']}\n")
-    
+
+    # 计算整体字数统计（基于所有脚本）
+    combined_content = "\n\n".join(scripts)
+    word_stats = count_script_words(combined_content)
+
+    # 保存字数统计到文件
+    word_stats_file = output_dir / f"{folder_name}_word_statistics.txt"
+    with open(word_stats_file, "w", encoding="utf-8") as f:
+        f.write(f"脚本字数统计报告\n")
+        f.write(f"===================\n")
+        f.write(f"总页数: {len(scripts)}\n")
+        f.write(f"总字符数（含空格）: {word_stats['total_chars']:,}\n")
+        f.write(f"总字符数（不含空格）: {word_stats['total_chars_no_space']:,}\n")
+        f.write(f"中文字符数: {word_stats['chinese_chars']:,}\n")
+        f.write(f"英文单词数: {word_stats['english_words']:,}\n")
+        f.write(f"数字字符数: {word_stats['digits']:,}\n")
+        f.write(f"标点符号数: {word_stats['punctuation']:,}\n")
+        f.write(f"平均每页字符数: {word_stats['total_chars_no_space'] // len(scripts) if scripts else 0:,}\n")
+
     print(f"[LOG] 全部处理完成，成功生成文稿数: {len(scripts)}")
     print(f"[LOG] Token使用统计 - 总计: {total_tokens_used}, 输入: {total_prompt_tokens}, 输出: {total_completion_tokens}")
+    print(f"[LOG] 字数统计 - 总字符数: {word_stats['total_chars_no_space']:,}, 中文: {word_stats['chinese_chars']:,}, 英文单词: {word_stats['english_words']:,}")
     
     return {
         "message": "文稿生成成功",
@@ -770,7 +825,63 @@ async def generate_folder_scripts(
         "total_tokens_used": total_tokens_used,
         "prompt_tokens_used": total_prompt_tokens,
         "completion_tokens_used": total_completion_tokens,
-        "token_details": token_details
+        "token_details": token_details,
+        "word_statistics": word_stats,
+        "word_statistics_file": str(word_stats_file)
+    }
+
+def count_script_words(script_text: str) -> Dict[str, int]:
+    """
+    计算脚本的字数统计
+
+    参数:
+        script_text: 脚本文本内容
+
+    返回:
+        包含各种字数统计的字典:
+        - total_chars: 总字符数（包含空格和标点）
+        - total_chars_no_space: 总字符数（不含空格）
+        - chinese_chars: 中文字符数
+        - english_words: 英文单词数
+        - digits: 数字字符数
+        - punctuation: 标点符号数
+    """
+    import string
+
+    # 初始化计数器
+    total_chars = len(script_text)
+    chinese_chars = 0
+    english_words = 0
+    digits = 0
+    punctuation = 0
+
+    # 统计中文字符
+    for char in script_text:
+        if '\u4e00' <= char <= '\u9fff':
+            chinese_chars += 1
+        elif char.isdigit():
+            digits += 1
+        elif char in string.punctuation or char in '。，、；：？！""''（）【】《》':
+            punctuation += 1
+
+    # 统计英文单词（通过空格分割并过滤）
+    words = script_text.split()
+    for word in words:
+        # 移除标点符号后检查是否为英文单词
+        clean_word = ''.join(c for c in word if c.isalpha())
+        if clean_word and clean_word.isascii():
+            english_words += 1
+
+    # 计算不含空格的总字符数
+    total_chars_no_space = total_chars - script_text.count(' ') - script_text.count('\n') - script_text.count('\t')
+
+    return {
+        "total_chars": total_chars,
+        "total_chars_no_space": total_chars_no_space,
+        "chinese_chars": chinese_chars,
+        "english_words": english_words,
+        "digits": digits,
+        "punctuation": punctuation
     }
 
 @router.post("/split-script")
